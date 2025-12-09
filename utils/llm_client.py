@@ -15,7 +15,35 @@ import mimetypes
 try:
     from ..config import ModelConfig
 except ImportError:
-    from config import ModelConfig
+    # 当作为独立脚本运行时的 fallback
+    import sys
+    from pathlib import Path as _Path
+    _parent = _Path(__file__).parent.parent
+    if str(_parent) not in sys.path:
+        sys.path.insert(0, str(_parent))
+    
+    # 尝试从父目录的 config 模块导入
+    try:
+        from config import ModelConfig
+    except ImportError:
+        # 最后的 fallback：定义一个简单的 ModelConfig
+        from dataclasses import dataclass as _dataclass
+        
+        @_dataclass
+        class ModelConfig:
+            name: str = "default-model"
+            api_base: str = ""
+            api_key: str = ""
+            temperature: float = 0.7
+            max_tokens: int = 4096
+            top_p: float = 1.0
+            frequency_penalty: float = 0.0
+            presence_penalty: float = 0.0
+            timeout: int = 120
+            retry_count: int = 3
+            stream: bool = False
+            vision_enabled: bool = False
+            vision_detail: str = "high"
 
 
 @dataclass

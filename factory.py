@@ -15,10 +15,13 @@ from .workflow import VolatilityWorkflow
 def create_workflow(
     model_name: str = "gpt-4",
     api_key: Optional[str] = None,
-    base_url: Optional[str] = None,
+    api_base: Optional[str] = None,
+    base_url: Optional[str] = None,  # 别名
     max_retries: int = 3,
     timeout: int = 60,
     debug: bool = False,
+    vision_model_name: Optional[str] = None,
+    temperature: float = 0.7,
     **kwargs,
 ) -> VolatilityWorkflow:
     """
@@ -27,27 +30,51 @@ def create_workflow(
     Args:
         model_name: 模型名称
         api_key: API 密钥（可选，从环境变量读取）
-        base_url: API 基础 URL（可选）
+        api_base: API 基础 URL（可选）
+        base_url: API 基础 URL 别名
         max_retries: 最大重试次数
         timeout: 超时时间（秒）
         debug: 是否开启调试模式
+        vision_model_name: 视觉模型名称
+        temperature: 温度参数
         **kwargs: 其他配置参数
     
     Returns:
         VolatilityWorkflow 实例
     """
+    # 处理 api_base 别名
+    actual_api_base = api_base or base_url or ""
+    
+    # 创建模型配置
     model_config = ModelConfig(
-        model_name=model_name,
-        api_key=api_key,
-        base_url=base_url,
+        name=model_name,
+        api_key=api_key or "",
+        api_base=actual_api_base,
         timeout=timeout,
+        retry_count=max_retries,
+        temperature=temperature,
     )
     
+    # 创建视觉模型配置（如果指定）
+    vision_model_config = None
+    if vision_model_name:
+        vision_model_config = ModelConfig(
+            name=vision_model_name,
+            api_key=api_key or "",
+            api_base=actual_api_base,
+            timeout=timeout,
+            retry_count=max_retries,
+            temperature=temperature,
+            vision_enabled=True,
+        )
+    
+    # 创建工作流配置
     config = WorkflowConfig(
         model_config=model_config,
+        vision_model_config=vision_model_config,
         max_retries=max_retries,
         debug=debug,
-        **kwargs,
+        **{k: v for k, v in kwargs.items() if hasattr(WorkflowConfig, k)},
     )
     
     return VolatilityWorkflow(config)
@@ -104,7 +131,7 @@ def create_workflow_from_env() -> VolatilityWorkflow:
     return create_workflow(
         model_name=os.getenv("VOL_WORKFLOW_MODEL", "gpt-4"),
         api_key=os.getenv("VOL_WORKFLOW_API_KEY"),
-        base_url=os.getenv("VOL_WORKFLOW_BASE_URL"),
+        api_base=os.getenv("VOL_WORKFLOW_BASE_URL"),
         debug=os.getenv("VOL_WORKFLOW_DEBUG", "").lower() == "true",
     )
 
@@ -129,10 +156,11 @@ def _build_config_from_dict(config_dict: Dict[str, Any]) -> WorkflowConfig:
     # 提取模型配置
     model_dict = config_dict.pop("model", {})
     model_config = ModelConfig(
-        model_name=model_dict.get("name", "gpt-4"),
-        api_key=model_dict.get("api_key"),
-        base_url=model_dict.get("base_url"),
+        name=model_dict.get("name", "gpt-4"),
+        api_key=model_dict.get("api_key", ""),
+        api_base=model_dict.get("base_url", "") or model_dict.get("api_base", ""),
         timeout=model_dict.get("timeout", 60),
+        retry_count=model_dict.get("retry_count", 3),
     )
     
     # 构建工作流配置

@@ -12,6 +12,7 @@ class CodeNodeResult:
     success: bool
     result: Dict[str, Any]
     error: Optional[str] = None
+    duration: float = 0.0
 
 
 def z_score(x: float, mean: float = 0, std: float = 1) -> float:
@@ -104,3 +105,28 @@ def find_strike_by_delta(S: float, target_delta: float, T: float, r: float,
             return round(S * (1 + (0.5 - target_delta) * 0.3), 2)
         else:
             return round(S * (1 - (0.5 - abs(target_delta)) * 0.3), 2)
+
+
+# 导出代码节点函数
+from .feature_calc import code1_feature_calculation
+from .signal_scoring import code2_signal_scoring
+from .strike_calc import code3_strike_calculation
+from .edge_estimation import code4_edge_estimation
+
+
+__all__ = [
+    # 结果类
+    "CodeNodeResult",
+    # 辅助函数
+    "z_score",
+    "safe_divide",
+    "clamp",
+    "bs_delta",
+    "find_strike_by_delta",
+    "HAS_SCIPY",
+    # 代码节点函数
+    "code1_feature_calculation",
+    "code2_signal_scoring",
+    "code3_strike_calculation",
+    "code4_edge_estimation",
+]

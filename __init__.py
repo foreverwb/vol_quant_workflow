@@ -37,7 +37,16 @@ from .workflow import VolatilityWorkflow, BatchProcessor, create_workflow
 
 # 便捷导入
 from .prompts import get_prompt, list_prompts
-from .schemas import get_schema, list_schemas
+from .schemas import get_schema
+
+# 从 schemas 导入 list_schemas（如果存在）
+try:
+    from .schemas import list_schemas
+except ImportError:
+    def list_schemas():
+        from .schemas.base import registry
+        return registry.list_names()
+
 from .nodes import (
     RouterNode,
     CommandGeneratorNode,

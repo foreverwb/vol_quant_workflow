@@ -5,14 +5,15 @@ from datetime import datetime
 from typing import Optional
 
 try:
-    from .base import BaseNode, NodeResult
+    from .base import LLMNodeBase, NodeResult, register_node
     from ..core.logger import NodeLogger
 except ImportError:
-    from nodes.base import BaseNode, NodeResult
+    from nodes.base import LLMNodeBase, NodeResult, register_node
     from core.logger import NodeLogger
 
 
-class RouterNode(BaseNode):
+@register_node("router")
+class RouterNode(LLMNodeBase):
     """
     路由节点
     
@@ -73,17 +74,17 @@ class RouterNode(BaseNode):
             # LLM 判断
             self._log_llm_call(user_input)
             
-            response = await self.llm_client.chat(
+            response = await self.client.chat(
                 system_prompt=self.SYSTEM_PROMPT,
-                user_message=user_input
+                user_prompt=user_input  # 修复: user_message -> user_prompt
             )
             
             # 记录 LLM 响应
-            model_name = getattr(self.llm_client.config, 'name', 'unknown')
+            model_name = getattr(self.client.config, 'name', 'unknown')
             self.logger.log_llm_response(response, model_name)
             
             # 解析结果
-            route_type = response.strip().upper()
+            route_type = response.content.strip().upper() if response.success else "INVALID"
             if route_type not in ["VARIABLES", "DATA", "INVALID"]:
                 self.logger.warning(f"LLM 返回非预期值: {route_type}, 默认为 INVALID")
                 route_type = "INVALID"

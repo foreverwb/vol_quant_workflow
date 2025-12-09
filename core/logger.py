@@ -106,12 +106,14 @@ class ErrorCollector:
     收集工作流执行过程中的所有错误，支持导出和分析
     """
     _instance: Optional['ErrorCollector'] = None
+    _errors: List[ErrorRecord]
+    _warnings: List[ErrorRecord]
     
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._errors: List[ErrorRecord] = []
-            cls._instance._warnings: List[ErrorRecord] = []
+            cls._instance._errors = []
+            cls._instance._warnings = []
         return cls._instance
     
     def add_error(

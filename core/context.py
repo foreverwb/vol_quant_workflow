@@ -33,6 +33,11 @@ class WorkflowContext:
     
     在整个工作流执行过程中传递数据
     """
+    # 配置引用
+    config: Any = None  # WorkflowConfig
+    logger: Any = None
+    error_collector: Any = None
+    
     # 输入数据
     user_input: str = ""
     uploaded_files: List[str] = field(default_factory=list)
@@ -45,6 +50,7 @@ class WorkflowContext:
     
     # ===== Meso 上下文 =====
     market_context: Optional[Any] = None  # MarketContext
+    meso_context: Optional[Dict[str, Any]] = None  # Meso 平台上下文 (兼容别名)
     dynamic_config: Optional[Any] = None  # DynamicConfig
     context_params: Dict[str, Any] = field(default_factory=dict)
     
@@ -73,8 +79,16 @@ class WorkflowContext:
     # 最终报告 (#8001)
     final_report: str = ""
     
-    # 元数据
+    # ===== 执行状态 =====
     status: WorkflowStatus = WorkflowStatus.PENDING
+    current_step: str = ""  # 当前执行步骤
+    step_results: Dict[str, Any] = field(default_factory=dict)  # 各步骤结果
+    
+    # ===== 时间追踪 =====
+    start_time: Optional[Any] = None  # datetime
+    end_time: Optional[Any] = None  # datetime
+    
+    # ===== 错误记录 =====
     errors: List[str] = field(default_factory=list)
     timestamp: str = ""
     
@@ -85,6 +99,7 @@ class WorkflowContext:
         self.route_type = ""
         self.commands = ""
         self.market_context = None
+        self.meso_context = None
         self.dynamic_config = None
         self.context_params = {}
         self.validation_result = {}
@@ -97,6 +112,10 @@ class WorkflowContext:
         self.edge_result = {}
         self.final_report = ""
         self.status = WorkflowStatus.PENDING
+        self.current_step = ""
+        self.step_results = {}
+        self.start_time = None
+        self.end_time = None
         self.errors = []
         self.timestamp = ""
     

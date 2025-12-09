@@ -1,6 +1,14 @@
 """
 StrategyMapper 节点 Schema (#7001)
 策略映射结果的 JSON Schema 定义
+
+v2.0 更新：
+- direction 枚举值改为英文
+- tier 枚举值改为英文
+- legs 结构重构 (新增 strike_method, strike_value)
+- entry 改为 entry_conditions 数组
+- exit 改为 exit_rules 对象
+- 新增 rejected_strategies, context_applied, risk_notes
 """
 from .base import SchemaDefinition, register_schema
 
@@ -8,19 +16,15 @@ from .base import SchemaDefinition, register_schema
 STRATEGY_MAPPER_SCHEMA = register_schema(SchemaDefinition(
     name="strategy_mapper",
     description="策略映射与 Edge 估算结果",
-    version="1.0",
+    version="2.0",
     
     schema={
         "type": "object",
-        "required": ["symbol", "direction", "strategies"],
+        "required": ["direction", "strategies"],
         "properties": {
-            "symbol": {
-                "type": "string",
-                "description": "标的代码"
-            },
             "direction": {
                 "type": "string",
-                "enum": ["做多波动率", "做空波动率", "观望"],
+                "enum": ["LONG_VOL", "SHORT_VOL"],
                 "description": "交易方向"
             },
             "strategies": {
@@ -28,30 +32,27 @@ STRATEGY_MAPPER_SCHEMA = register_schema(SchemaDefinition(
                 "description": "策略列表（1-3个）",
                 "items": {
                     "type": "object",
-                    "required": ["name", "tier", "dte", "legs", "entry", "exit", "edge_estimate"],
+                    "required": ["tier", "name", "structure", "legs", "entry_conditions", "exit_rules", "edge_estimate"],
                     "properties": {
-                        "name": {
-                            "type": "string",
-                            "description": "策略名称 (如 Long Straddle, Iron Condor)"
-                        },
                         "tier": {
                             "type": "string",
-                            "enum": ["进取版", "均衡版", "保守版"],
+                            "enum": ["aggressive", "balanced", "conservative"],
                             "description": "策略档位"
                         },
-                        "description": {
+                        "name": {
                             "type": "string",
-                            "description": "策略描述"
+                            "description": "策略名称"
                         },
-                        "dte": {
+                        "structure": {
                             "type": "string",
-                            "description": "到期天数 (如 '14-21天')"
+                            "description": "策略结构描述"
                         },
                         "legs": {
                             "type": "array",
                             "description": "策略腿",
                             "items": {
                                 "type": "object",
+                                "required": ["action", "type"],
                                 "properties": {
                                     "action": {
                                         "type": "string",
@@ -63,44 +64,34 @@ STRATEGY_MAPPER_SCHEMA = register_schema(SchemaDefinition(
                                         "enum": ["call", "put"],
                                         "description": "期权类型"
                                     },
-                                    "strike": {
-                                        "type": "string",
-                                        "description": "行权价描述 (如 'ATM', 'Gamma Wall附近')"
-                                    },
                                     "delta": {
-                                        "type": "string",
-                                        "description": "Delta值 (如 '0.30', '25Δ')"
+                                        "type": "number",
+                                        "description": "Delta 值 (如 0.30)"
                                     },
-                                    "quantity": {
+                                    "strike_method": {
+                                        "type": "string",
+                                        "enum": ["ATM", "Delta", "Wall", "OTM"],
+                                        "description": "行权价计算方法"
+                                    },
+                                    "strike_value": {
+                                        "type": "string",
+                                        "description": "行权价值或计算方式"
+                                    },
+                                    "dte": {
                                         "type": "integer",
-                                        "default": 1,
-                                        "description": "数量"
+                                        "description": "到期天数"
                                     }
                                 }
                             }
                         },
-                        "entry": {
-                            "type": "object",
-                            "description": "入场条件",
-                            "properties": {
-                                "trigger": {
-                                    "type": "string",
-                                    "description": "触发条件"
-                                },
-                                "timing": {
-                                    "type": "string",
-                                    "description": "时机"
-                                },
-                                "conditions": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                    "description": "其他条件"
-                                }
-                            }
+                        "entry_conditions": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "入场条件列表"
                         },
-                        "exit": {
+                        "exit_rules": {
                             "type": "object",
-                            "description": "退出条件",
+                            "description": "退出规则",
                             "properties": {
                                 "profit_target": {
                                     "type": "string",
@@ -112,51 +103,81 @@ STRATEGY_MAPPER_SCHEMA = register_schema(SchemaDefinition(
                                 },
                                 "time_exit": {
                                     "type": "string",
-                                    "description": "时间退出"
+                                    "description": "时间退出规则"
                                 },
                                 "regime_change": {
                                     "type": "string",
-                                    "description": "Regime变化退出"
+                                    "description": "Regime 变化退出"
                                 }
                             }
                         },
                         "edge_estimate": {
                             "type": "object",
-                            "required": ["win_rate", "rr_ratio", "ev", "meets_threshold"],
+                            "required": ["win_rate", "rr_ratio", "meets_threshold"],
                             "description": "Edge 估算",
                             "properties": {
                                 "win_rate": {
                                     "type": "number",
-                                    "minimum": 0,
-                                    "maximum": 1,
-                                    "description": "胜率"
+                                    "description": "胜率 (0-1)"
                                 },
                                 "rr_ratio": {
                                     "type": "string",
                                     "description": "盈亏比 (如 '2:1')"
                                 },
-                                "ev": {
-                                    "type": "number",
-                                    "description": "期望收益"
-                                },
-                                "avg_win": {
-                                    "type": "number",
-                                    "description": "平均盈利"
-                                },
-                                "avg_loss": {
-                                    "type": "number",
-                                    "description": "平均亏损"
-                                },
-                                "max_drawdown": {
-                                    "type": "number",
-                                    "description": "最大回撤"
+                                "expected_value": {
+                                    "type": "string",
+                                    "enum": ["positive", "negative", "neutral"],
+                                    "description": "期望值方向"
                                 },
                                 "meets_threshold": {
                                     "type": "boolean",
                                     "description": "是否满足 Edge 门槛"
                                 }
                             }
+                        },
+                        "risk_notes": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "风险提示"
                         }
+                    }
+                }
+            },
+            "rejected_strategies": {
+                "type": "array",
+                "description": "被拒绝的策略列表",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "策略名称"
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "拒绝原因"
+                        }
+                    }
+                }
+            },
+            "context_applied": {
+                "type": "object",
+                "description": "应用的上下文",
+                "properties": {
+                    "dte_range": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "DTE 范围 [min, max]"
+                    },
+                    "delta_bias": {
+                        "type": "string",
+                        "enum": ["neutral", "bullish", "bearish"],
+                        "description": "Delta 偏好"
+                    },
+                    "blacklist_checked": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "已检查的黑名单策略"
                     }
                 }
             }
@@ -165,7 +186,6 @@ STRATEGY_MAPPER_SCHEMA = register_schema(SchemaDefinition(
 ))
 
 
-# 便捷获取 schema 字典
 def get_strategy_mapper_schema():
     """获取 StrategyMapper schema 字典"""
     return STRATEGY_MAPPER_SCHEMA.schema

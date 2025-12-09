@@ -3,8 +3,11 @@
 支持通用模型配置，不指定具体厂商
 """
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, TYPE_CHECKING
 import os
+
+if TYPE_CHECKING:
+    pass  # 用于类型检查时的循环导入
 
 
 @dataclass
@@ -116,6 +119,20 @@ class WorkflowConfig:
     工作流配置参数
     包含决策阈值、因子权重、系统配置等
     """
+    # === 模型配置 ===
+    model_config: Optional['ModelConfig'] = None  # 默认模型配置
+    vision_model_config: Optional['ModelConfig'] = None  # 视觉模型配置
+    
+    # === 运行时配置 ===
+    max_retries: int = 3  # 最大重试次数
+    debug: bool = False  # 调试模式
+    default_options: Dict[str, Any] = field(default_factory=dict)  # 默认运行选项
+    
+    # === 约束配置 ===
+    blacklist: List[str] = field(default_factory=list)  # 标的黑名单
+    max_position_size: int = 100  # 最大仓位
+    min_edge_threshold: float = 0.05  # 最小 Edge 阈值
+    
     # === Meso 系统集成配置 ===
     MESO_ENABLED: bool = True  # 是否启用 Meso 上下文
     MESO_API_URL: str = "http://localhost:5000"  # Meso API 地址

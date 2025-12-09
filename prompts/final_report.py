@@ -1,152 +1,180 @@
 """
 FinalReport 节点 Prompt (#8001)
-汇总所有分析结果并生成完整的可执行策略报告
+生成结构化的波动率交易决策报告
 """
 from .base import PromptTemplate, register_prompt
 
 
 FINAL_REPORT_PROMPT = register_prompt(PromptTemplate(
     name="final_report",
-    description="汇总所有分析结果并生成完整的可执行策略报告",
+    description="汇总分析结果，生成可执行的决策报告",
     
-    system="""你是最终决策报告生成Agent,负责汇总所有分析结果并生成完整的可执行策略报告。
+    system="""你是决策报告生成模块，负责将全部分析结果整合为简洁、可执行的交易报告。
 
-【任务】
-1. 汇总数据校验、特征计算、信号打分、概率校准、策略映射、行权价计算、Edge估算的所有结果
-2. 生成结构化的决策报告
-3. 包含市场状态、核心结论、信号评分、推荐策略、风险提示、监控要点
+## 报告设计原则
+1. **结论先行**: 核心判断放最前
+2. **数据支撑**: 关键数值必须引用
+3. **行动导向**: 策略参数具体可执行
+4. **风险透明**: 不确定性明确标注
 
-【输入数据】
-- 核心字段: ${core_fields}
-- 特征: ${features}
-- 信号评分: ${scores}
-- 概率校准: ${probability}
-- 策略(含行权价与Edge): ${strategies}
+## 报告模板
 
-【输出格式】
-生成Markdown格式的决策报告,包含:
+```markdown
+# {SYMBOL} 波动率交易决策
 
-# 波动率交易决策报告
-
-**标的**: {SYMBOL} | **现价**: {SPOT} | **VOL TRIGGER**: {VOL_TRIGGER}  
-**分析时间**: {TIMESTAMP} (ET)
+**现价**: ${SPOT} | **VOL TRIGGER**: ${VOL_TRIGGER} | **时间**: ${TIMESTAMP} ET
 
 ---
 
-## 1. 核心结论
+## 🎯 核心结论
 
-**决策方向**: 
-{做多波动率/做空波动率/观望}  
+**方向**: {LONG_VOL / SHORT_VOL / NEUTRAL}  
+**概率**: {p_value} ({confidence})  
+**首选策略**: {strategy_name}
 
-**概率**: 
-{p_long/p_short} (置信度: {high/medium/low})  
-
-**主要理由**: 
-[引用VOL TRIGGER判据、VRP、GEX等核心因素]
+**判断依据**:
+> {2-3句话概括主要逻辑，引用 VOL TRIGGER 位置、VRP、GEX 等关键因素}
 
 ---
 
-## 2. 市场状态
+## 📊 市场状态
 
 ### Gamma Regime
-- **VOL TRIGGER**: {value}
-- **现价位置**: {above/below/near} → NET-GEX {positive/negative/neutral}
-- **解读**: [说明正/负Gamma对波动的影响]
+| 指标 | 数值 | 解读 |
+|-----|------|-----|
+| VOL TRIGGER | {value} | - |
+| Spot 位置 | {above/below/near} | {正/负 Gamma 含义} |
+| Gamma Wall | {value} ({prox}%) | {压制/支撑作用} |
 
-### 关键位
-- **Gamma Wall**: {value} (距离: {%})
-- **Call Wall**: {value}
-- **Put Wall**: {value}
-
----
-
-## 3. 信号评分
-
-### 做多波动率评分: {L}
-**分解**:
-- VRP: {value}
-- GEX: {value}
-- VEX: {value}
-- Carry: {value}
-- Skew: {value}
-
-### 做空波动率评分: {S}
-**分解**:
-- VRP: {value}
-- GEX: {value}
-- Carry: {value}
+### 波动率结构
+| 指标 | 数值 | 信号 |
+|-----|------|-----|
+| VRP | {IV-HV}% | {高估/低估/合理} |
+| IVR | {value}% | {高/中/低位} |
+| 期限结构 | {Contango/Backwardation} | {term_slope} |
 
 ---
 
-## 4. 推荐策略
+## 📈 信号评分
 
-[对每个通过Edge门槛的策略]
+| 方向 | 评分 | 概率 | 置信度 |
+|-----|------|-----|-------|
+| 做多波动率 | {L} | {p_long} | {conf} |
+| 做空波动率 | {S} | {p_short} | {conf} |
 
-### {保守版/均衡版/进取版} - {策略名称}
+**主要贡献因子**:
+- {factor1}: {value} ({解读})
+- {factor2}: {value} ({解读})
+- {factor3}: {value} ({解读})
 
-**描述**: [简要说明策略逻辑]
+---
+
+## 💼 推荐策略
+
+### {Tier} - {Strategy Name}
+
+**结构**:
+{legs_description}
 
 **参数**:
-- DTE: {dte}天
-- 行权区间:
-  - [Leg1]: {action} {strike_calculated} {type} ({delta}, {calculation_method})
-  - [Leg2]: ...
+- DTE: {days}天
+- 行权价:
+  - Leg1: {action} {strike} {type} (Δ={delta})
+  - Leg2: {action} {strike} {type} (Δ={delta})
 
 **入场**:
-- 触发: [具体条件]
-- 时机: [具体时间]
-- 条件: [其他约束]
+- [ ] {condition1}
+- [ ] {condition2}
 
 **退出**:
-- 止盈: [目标]
-- 止损: [条件]
-- 时间: [最晚退出时间]
-- Regime变化: [触发条件]
+- 止盈: {target}
+- 止损: {stop}
+- 时间: {time_rule}
+- Regime变化: {regime_rule}
 
 **Edge估算**:
-- 胜率: {win_rate}
-- 盈亏比: {rr_ratio}
-- 期望收益: {ev}
-- 平均盈利: {avg_win}
-- 平均亏损: {avg_loss}
-- 最大回撤: {max_drawdown}
-- 是否满足门槛: {✅/❌}
+| 胜率 | 盈亏比 | 期望 | 达标 |
+|-----|-------|-----|-----|
+| {win_rate} | {rr} | {ev} | {✅/❌} |
 
 ---
 
-## 5. 风险提示
+## ⚠️ 风险提示
 
-- 流动性: [Spread_atm评估]
-- Pin风险: [GammaWallProx评估]
-- 0DTE: 已规避
-- 事件风险: [是否跨期]
+{根据实际情况列出 2-4 条关键风险}
 
----
-
-## 6. 监控要点
-
-**强化关注**:
-- VOL TRIGGER跨越({value})
-- Gamma Wall突破({value})
-- 5-15分钟RIM变化
-- Spread扩大
-
-**退出触发**:
-- Spot穿越{VOL_TRIGGER}(方向)
-- GammaWallProx < {threshold}
-- IV扩张>{threshold}
+- **{Risk1}**: {description}
+- **{Risk2}**: {description}
 
 ---
-**报告生成**: {TIMESTAMP}""",
 
-    user="""请生成最终决策报告。
+## 👀 监控清单
 
-【数据汇总】
-核心字段: ${core_fields}
-特征: ${features}
-信号评分: ${scores}
-概率校准: ${probability}
-策略方案: ${strategies}""",
+**关键位突破**:
+- [ ] VOL TRIGGER ({value}): 穿越方向 → {action}
+- [ ] Gamma Wall ({value}): 突破 → {action}
+
+**指标变化**:
+- [ ] RIM 快速扩张 (>0.8) → 调整仓位
+- [ ] Spread 异常放大 → 流动性警告
+
+---
+*报告生成: ${TIMESTAMP}*
+```
+
+## 内容生成规则
+
+### 核心结论
+- 方向取自 `decision_gate.final_direction`
+- 概率取对应 p_long 或 p_short
+- 首选策略取 strategies[0]
+- 判断依据须引用具体数值
+
+### 市场状态
+- 必须包含 VOL TRIGGER 和 Spot 关系判定
+- Gamma Wall 距离用百分比表示
+- VRP = iv_m1_atm - hv20（取近月与20日）
+
+### 信号评分
+- 列出评分和概率
+- 主要贡献因子取 score_breakdown 前3项
+
+### 推荐策略
+- 仅展示通过 Edge 门槛的策略
+- 若无策略通过，说明原因并建议观望
+- 入场条件用 checkbox 格式便于跟踪
+
+### 风险提示
+根据实际数据生成，常见风险：
+- 流动性风险：spread_atm > 2%
+- Pin 风险：gamma_wall_prox < 0.5%
+- 事件风险：临近财报/FOMC
+- Regime 翻转：near VOL TRIGGER
+- Squeeze 风险：is_squeeze = true
+
+### 监控清单
+- 必须包含 VOL TRIGGER 和 Gamma Wall 两个关键位
+- 给出穿越后的具体行动建议
+
+## 输出格式
+输出完整的 Markdown 报告文本，不需要 JSON 包装。""",
+
+    user="""请生成决策报告。
+
+【核心字段】
+${core_fields}
+
+【计算特征】
+${features}
+
+【信号评分】
+${scores}
+
+【概率校准】
+${probability}
+
+【策略方案】
+${strategies}""",
 
     variables={
         "core_fields": "核心字段数据",

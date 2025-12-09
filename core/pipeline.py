@@ -31,7 +31,7 @@ class PipelineExecutor:
         self.workflow = workflow
         self.ctx = workflow.context
         self.logger = workflow.logger
-        self.client = workflow.client_manager
+        self.client_manager = workflow.client_manager
     
     async def execute(self, options: Dict[str, Any]) -> Dict[str, Any]:
         """执行完整流水线"""
@@ -90,14 +90,11 @@ class PipelineExecutor:
         self.logger.info("Step 1: Running router...")
         
         from ..prompts.router import ROUTER_PROMPT
-        from ..schemas.router import ROUTER_SCHEMA
         
-        response = await self.client.chat_completion(
-            messages=[
-                {"role": "system", "content": ROUTER_PROMPT},
-                {"role": "user", "content": self.ctx.user_input},
-            ],
-            response_format={"type": "json_object", "schema": ROUTER_SCHEMA},
+        client = self.client_manager.get_client("router")
+        response = await client.chat(
+            system_prompt=ROUTER_PROMPT,
+            user_prompt=self.ctx.user_input,
         )
         
         result = self._parse_json_response(response)
@@ -111,20 +108,20 @@ class PipelineExecutor:
         self.logger.info("Step 2: Generating command...")
         
         from ..prompts.command_generator import COMMAND_GENERATOR_PROMPT
-        from ..schemas.command_generator import COMMAND_SCHEMA
+        
+        # 获取 Meso 上下文 (兼容两种属性名)
+        meso_ctx = self.ctx.meso_context or self.ctx.market_context or {}
         
         prompt = COMMAND_GENERATOR_PROMPT.format(
             user_input=self.ctx.user_input,
             route_info=route_result,
-            meso_context=self.ctx.meso_context or {},
+            meso_context=meso_ctx,
         )
         
-        response = await self.client.chat_completion(
-            messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": self.ctx.user_input},
-            ],
-            response_format={"type": "json_object", "schema": COMMAND_SCHEMA},
+        client = self.client_manager.get_client("command_generator")
+        response = await client.chat(
+            system_prompt=prompt,
+            user_prompt=self.ctx.user_input,
         )
         
         result = self._parse_json_response(response)
@@ -169,9 +166,10 @@ class PipelineExecutor:
             raw_data=raw_data,
         )
         
-        response = await self.client.chat_completion(
-            messages=[{"role": "system", "content": prompt}],
-            response_format={"type": "json_object", "schema": VALIDATOR_SCHEMA},
+        client = self.client_manager.get_client("data_validator")
+        response = await client.chat(
+            system_prompt=prompt,
+            json_schema=VALIDATOR_SCHEMA,
         )
         
         result = self._parse_json_response(response)
@@ -188,14 +186,18 @@ class PipelineExecutor:
         from ..prompts.probability_calibrator import PROBABILITY_CALIBRATOR_PROMPT
         from ..schemas.probability_calibrator import PROBABILITY_SCHEMA
         
+        # 获取 Meso 上下文
+        meso_ctx = self.ctx.meso_context or self.ctx.market_context or {}
+        
         prompt = PROBABILITY_CALIBRATOR_PROMPT.format(
             data=validated_data,
-            meso_context=self.ctx.meso_context or {},
+            meso_context=meso_ctx,
         )
         
-        response = await self.client.chat_completion(
-            messages=[{"role": "system", "content": prompt}],
-            response_format={"type": "json_object", "schema": PROBABILITY_SCHEMA},
+        client = self.client_manager.get_client("probability_calibrator")
+        response = await client.chat(
+            system_prompt=prompt,
+            json_schema=PROBABILITY_SCHEMA,
         )
         
         result = self._parse_json_response(response)
@@ -213,15 +215,19 @@ class PipelineExecutor:
         from ..prompts.strategy_mapper import STRATEGY_MAPPER_PROMPT
         from ..schemas.strategy_mapper import STRATEGY_SCHEMA
         
+        # 获取 Meso 上下文
+        meso_ctx = self.ctx.meso_context or self.ctx.market_context or {}
+        
         prompt = STRATEGY_MAPPER_PROMPT.format(
             probabilities=probabilities,
             validated_data=self.ctx.step_results.get("validated_data", {}),
-            meso_context=self.ctx.meso_context or {},
+            meso_context=meso_ctx,
         )
         
-        response = await self.client.chat_completion(
-            messages=[{"role": "system", "content": prompt}],
-            response_format={"type": "json_object", "schema": STRATEGY_SCHEMA},
+        client = self.client_manager.get_client("strategy_mapper")
+        response = await client.chat(
+            system_prompt=prompt,
+            json_schema=STRATEGY_SCHEMA,
         )
         
         result = self._parse_json_response(response)
@@ -234,9 +240,11 @@ class PipelineExecutor:
         self.ctx.current_step = StepType.CONSTRAINT_CHECKER.value
         self.logger.info("Step 7: Checking constraints...")
         
+        config = self.workflow.config
+        
         # 检查黑名单
         symbol = self.ctx.step_results.get("command", {}).get("symbol", "")
-        blacklist = self.workflow.config.blacklist or []
+        blacklist = getattr(config, 'blacklist', []) or []
         
         if symbol.upper() in [s.upper() for s in blacklist]:
             strategy["blocked"] = True
@@ -244,14 +252,14 @@ class PipelineExecutor:
             self.logger.warning(f"Symbol {symbol} blocked by blacklist")
         
         # 检查仓位限制
-        max_position = self.workflow.config.max_position_size
+        max_position = getattr(config, 'max_position_size', 100)
         if strategy.get("position_size", 0) > max_position:
             strategy["position_size"] = max_position
             strategy["size_capped"] = True
             self.logger.info(f"Position size capped to {max_position}")
         
         # 检查最小 edge
-        min_edge = self.workflow.config.min_edge_threshold
+        min_edge = getattr(config, 'min_edge_threshold', 0.05)
         if strategy.get("edge", 0) < min_edge:
             strategy["low_edge_warning"] = True
             self.logger.warning(f"Edge {strategy.get('edge')} below threshold {min_edge}")
@@ -267,7 +275,6 @@ class PipelineExecutor:
         self.logger.info("Step 8: Generating final report...")
         
         from ..prompts.final_report import FINAL_REPORT_PROMPT
-        from ..schemas.final_report import REPORT_SCHEMA
         
         prompt = FINAL_REPORT_PROMPT.format(
             user_input=self.ctx.user_input,
@@ -277,10 +284,8 @@ class PipelineExecutor:
             command=self.ctx.step_results.get("command", {}),
         )
         
-        response = await self.client.chat_completion(
-            messages=[{"role": "system", "content": prompt}],
-            response_format={"type": "json_object", "schema": REPORT_SCHEMA},
-        )
+        client = self.client_manager.get_client("final_report")
+        response = await client.chat(system_prompt=prompt)
         
         result = self._parse_json_response(response)
         self.ctx.step_results["report"] = result
@@ -318,14 +323,24 @@ class PipelineExecutor:
         if isinstance(response, dict):
             return response
         
+        # 处理 LLMResponse 对象
+        if hasattr(response, "structured_output") and response.structured_output:
+            return response.structured_output
+        
         if hasattr(response, "content"):
             content = response.content
             if isinstance(content, str):
-                return json.loads(content)
-            return content
+                try:
+                    return json.loads(content)
+                except json.JSONDecodeError:
+                    return {"raw": content}
+            return content if isinstance(content, dict) else {"raw": str(content)}
         
         if isinstance(response, str):
-            return json.loads(response)
+            try:
+                return json.loads(response)
+            except json.JSONDecodeError:
+                return {"raw": response}
         
         return {"raw": str(response)}
     

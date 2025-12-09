@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
-from .config import WorkflowConfig
+from .config import WorkflowConfig, ModelConfig
 from .core import (
     WorkflowContext,
     WorkflowStatus,
@@ -69,7 +69,8 @@ class VolatilityWorkflow:
     
     async def run(
         self,
-        user_input: str,
+        user_input: str = "",
+        files: Optional[List[str]] = None,
         meso_context: Optional[Dict[str, Any]] = None,
         options: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
@@ -78,6 +79,7 @@ class VolatilityWorkflow:
         
         Args:
             user_input: 用户输入的查询
+            files: 上传的文件列表
             meso_context: Meso平台上下文（可选）
             options: 运行选项（可选）
         
@@ -93,6 +95,7 @@ class VolatilityWorkflow:
         # 重置上下文状态
         self.context.reset()
         self.context.user_input = user_input
+        self.context.uploaded_files = files or []
         self.context.start_time = datetime.now()
         
         # 应用 Meso 上下文
@@ -100,7 +103,8 @@ class VolatilityWorkflow:
             self._meso_handler.apply_context(meso_context)
         
         # 合并选项
-        run_options = {**self.config.default_options, **(options or {})}
+        default_opts = getattr(self.config, 'default_options', {}) or {}
+        run_options = {**default_opts, **(options or {})}
         
         try:
             # 执行流水线
@@ -116,6 +120,16 @@ class VolatilityWorkflow:
         finally:
             self.context.end_time = datetime.now()
     
+    def run_sync(
+        self,
+        user_input: str = "",
+        files: Optional[List[str]] = None,
+        meso_context: Optional[Dict[str, Any]] = None,
+        options: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """同步运行工作流"""
+        return asyncio.run(self.run(user_input, files, meso_context, options))
+    
     async def run_batch(
         self,
         inputs: List[str],
@@ -128,7 +142,7 @@ class VolatilityWorkflow:
         
         async def run_single(user_input: str) -> Dict[str, Any]:
             async with semaphore:
-                return await self.run(user_input, meso_context, options)
+                return await self.run(user_input, None, meso_context, options)
         
         tasks = [run_single(inp) for inp in inputs]
         return await asyncio.gather(*tasks, return_exceptions=True)
@@ -188,14 +202,18 @@ class VolatilityWorkflow:
     
     def get_debug_info(self) -> Dict[str, Any]:
         """获取调试信息"""
+        model_name = "unknown"
+        if self.config.model_config:
+            model_name = getattr(self.config.model_config, 'name', 'unknown')
+        
         return {
             "status": self.context.status.value,
             "current_step": self.context.current_step,
             "execution_time": self.execution_time,
             "errors": self.errors,
             "config": {
-                "model": self.config.model_config.model_name,
-                "max_retries": self.config.max_retries,
+                "model": model_name,
+                "max_retries": getattr(self.config, 'max_retries', 3),
             },
         }
     
@@ -204,7 +222,33 @@ class VolatilityWorkflow:
         return self.context.step_results.copy()
 
 
+# ==================== 批量处理器 ====================
+
+# 从 core 导入 BatchProcessor
+from .core.batch_processor import BatchProcessor
+
+
 # ==================== 便捷函数 ====================
+
+def create_workflow(
+    api_base: str = "",
+    api_key: str = "",
+    model_name: str = "gpt-4o",
+    vision_model_name: Optional[str] = None,
+    temperature: float = 0.7,
+    **kwargs,
+) -> VolatilityWorkflow:
+    """便捷函数：创建工作流实例"""
+    from .factory import create_workflow as factory_create
+    return factory_create(
+        model_name=model_name,
+        api_key=api_key,
+        api_base=api_base,
+        vision_model_name=vision_model_name,
+        temperature=temperature,
+        **kwargs,
+    )
+
 
 async def run_workflow(
     user_input: str,
@@ -215,4 +259,4 @@ async def run_workflow(
     cfg = config or WorkflowConfig()
     
     async with VolatilityWorkflow(cfg) as workflow:
-        return await workflow.run(user_input, meso_context)
+        return await workflow.run(user_input, meso_context=meso_context)

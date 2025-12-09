@@ -6,19 +6,27 @@ LLM 客户端管理器
 - 客户端缓存管理
 - 支持多种配置方式 (YAML / NodeModelMapping / 默认)
 """
-from typing import Dict, Optional, Set
+from typing import Dict, Optional, Set, TYPE_CHECKING, Any
+
+# 类型检查时导入（避免循环导入和运行时问题）
+if TYPE_CHECKING:
+    from ..config.model_config_loader import ModelsConfig, NodeConfig
 
 try:
-    from ..config import ModelConfig, NodeModelMapping
-    from ..config.model_config_loader import ModelsConfig, NodeConfig
+    from ..config import ModelConfig, NodeModelMapping, WorkflowConfig
+    from ..config.model_config_loader import ModelsConfig as ModelsConfigClass, NodeConfig as NodeConfigClass
     from ..utils.llm_client import LLMClient
 except ImportError:
-    from config import ModelConfig, NodeModelMapping
+    # 当作为独立脚本运行时的 fallback
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from config import ModelConfig, NodeModelMapping, WorkflowConfig
     try:
-        from config.model_config_loader import ModelsConfig, NodeConfig
+        from config.model_config_loader import ModelsConfig as ModelsConfigClass, NodeConfig as NodeConfigClass
     except ImportError:
-        ModelsConfig = None
-        NodeConfig = None
+        ModelsConfigClass = None
+        NodeConfigClass = None
     from utils.llm_client import LLMClient
 
 
@@ -37,48 +45,88 @@ class ClientManager:
     
     def __init__(
         self,
-        model_config: ModelConfig,
-        vision_model_config: Optional[ModelConfig] = None,
-        models_config: Optional[ModelsConfig] = None,
+        config: Any,  # 可以是 WorkflowConfig 或 ModelConfig
+        logger: Any = None,
+        models_config: Optional["ModelsConfig"] = None,
         node_model_mapping: Optional[NodeModelMapping] = None
     ):
         """
         初始化客户端管理器
         
         Args:
-            model_config: 默认模型配置
-            vision_model_config: 视觉模型配置
+            config: 工作流配置 (WorkflowConfig) 或模型配置 (ModelConfig)
+            logger: 日志记录器
             models_config: YAML 配置实例 (优先级最高)
             node_model_mapping: 节点模型映射
         """
-        self.model_config = model_config
-        self.vision_model_config = vision_model_config or model_config
+        self.logger = logger
         self._models_config = models_config
         self._node_model_mapping = node_model_mapping
+        self._initialized = False
         
         # 客户端缓存
         self._cache: Dict[str, LLMClient] = {}
         
+        # 处理不同类型的配置
+        if isinstance(config, WorkflowConfig):
+            self.workflow_config = config
+            self.model_config = config.model_config or ModelConfig()
+            self.vision_model_config = config.vision_model_config or self.model_config
+        elif isinstance(config, ModelConfig):
+            self.workflow_config = None
+            self.model_config = config
+            self.vision_model_config = config
+        else:
+            # 兜底处理
+            self.workflow_config = config
+            self.model_config = getattr(config, 'model_config', None) or ModelConfig()
+            self.vision_model_config = getattr(config, 'vision_model_config', None) or self.model_config
+        
+        # 创建默认客户端（延迟初始化）
+        self._default_text_client: Optional[LLMClient] = None
+        self._default_vision_client: Optional[LLMClient] = None
+    
+    async def initialize(self) -> None:
+        """初始化客户端管理器"""
+        if self._initialized:
+            return
+        
         # 创建默认客户端
-        self._default_text_client = LLMClient(model_config)
+        self._default_text_client = LLMClient(self.model_config)
         self._default_vision_client = (
-            LLMClient(vision_model_config) 
-            if vision_model_config else self._default_text_client
+            LLMClient(self.vision_model_config) 
+            if self.vision_model_config != self.model_config 
+            else self._default_text_client
         )
         
         # 缓存默认客户端
-        self._cache[f"default:text:{model_config.name}"] = self._default_text_client
-        if vision_model_config:
-            self._cache[f"default:vision:{vision_model_config.name}"] = self._default_vision_client
+        self._cache[f"default:text:{self.model_config.name}"] = self._default_text_client
+        if self.vision_model_config != self.model_config:
+            self._cache[f"default:vision:{self.vision_model_config.name}"] = self._default_vision_client
+        
+        self._initialized = True
+        if self.logger:
+            self.logger.info("ClientManager initialized")
+    
+    async def close(self) -> None:
+        """关闭所有客户端"""
+        await self.close_all()
+        self._initialized = False
+        if self.logger:
+            self.logger.info("ClientManager closed")
     
     @property
     def text_client(self) -> LLMClient:
         """获取默认文本客户端"""
+        if self._default_text_client is None:
+            self._default_text_client = LLMClient(self.model_config)
         return self._default_text_client
     
     @property
     def vision_client(self) -> LLMClient:
         """获取默认视觉客户端"""
+        if self._default_vision_client is None:
+            self._default_vision_client = LLMClient(self.vision_model_config)
         return self._default_vision_client
     
     def get_client(self, node_name: str) -> LLMClient:
@@ -106,8 +154,34 @@ class ClientManager:
         
         # 使用默认客户端
         if node_name in self.DEFAULT_VISION_NODES:
-            return self._default_vision_client
-        return self._default_text_client
+            return self.vision_client
+        return self.text_client
+    
+    async def chat_completion(self, messages: list, **kwargs) -> Any:
+        """
+        便捷方法：使用默认客户端进行聊天
+        
+        Args:
+            messages: 消息列表
+            **kwargs: 其他参数
+            
+        Returns:
+            LLM 响应
+        """
+        from ..utils.llm_client import Message
+        
+        # 转换消息格式
+        msg_objects = []
+        for msg in messages:
+            if isinstance(msg, dict):
+                msg_objects.append(Message(
+                    role=msg.get("role", "user"),
+                    content=msg.get("content", "")
+                ))
+            else:
+                msg_objects.append(msg)
+        
+        return await self.text_client.chat(messages=msg_objects, **kwargs)
     
     def _get_client_from_yaml(self, node_name: str) -> LLMClient:
         """从 YAML 配置创建客户端"""
@@ -173,6 +247,8 @@ class ClientManager:
                 closed_ids.add(client_id)
         
         self._cache.clear()
+        self._default_text_client = None
+        self._default_vision_client = None
     
     def get_summary(self) -> str:
         """获取配置摘要"""

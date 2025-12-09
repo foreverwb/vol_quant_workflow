@@ -22,10 +22,15 @@ Nodes 模块
 # 基础类
 from .base import (
     NodeResult,
+    CodeNodeResult,
     LLMNodeBase,
     CodeNodeBase,
     NodeFactory,
     register_node,
+    get_node_factory,
+    # 向后兼容
+    BaseNode,
+    BaseCodeNode,
 )
 
 # LLM 节点（导入触发注册）
@@ -37,7 +42,7 @@ from .strategy_mapper import StrategyMapperNode
 from .final_report import FinalReportNode
 
 # 代码节点
-from .code import CodeNodeResult
+from .code import CodeNodeResult as CodeResult
 from .code.feature_calc import code1_feature_calculation
 from .code.signal_scoring import code2_signal_scoring
 from .code.strike_calc import code3_strike_calculation
@@ -52,10 +57,15 @@ __all__ = [
     # 基础类
     "NodeResult",
     "LLMNodeResult",
+    "CodeNodeResult",
     "LLMNodeBase",
     "CodeNodeBase",
     "NodeFactory",
     "register_node",
+    "get_node_factory",
+    # 向后兼容
+    "BaseNode",
+    "BaseCodeNode",
     # LLM 节点
     "RouterNode",
     "CommandGeneratorNode",
@@ -64,7 +74,7 @@ __all__ = [
     "StrategyMapperNode",
     "FinalReportNode",
     # 代码节点
-    "CodeNodeResult",
+    "CodeResult",
     "code1_feature_calculation",
     "code2_signal_scoring",
     "code3_strike_calculation",

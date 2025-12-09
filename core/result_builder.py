@@ -121,22 +121,30 @@ class ResultBuilder:
     
     def _build_metadata(self) -> Dict[str, Any]:
         """构建元数据"""
+        # 安全获取模型名称
+        model_name = "unknown"
+        if hasattr(self.workflow.config, 'model_config') and self.workflow.config.model_config:
+            model_name = getattr(self.workflow.config.model_config, 'name', 'unknown')
+        
         return {
             "workflow_id": getattr(self.ctx, "workflow_id", None),
-            "model": self.workflow.config.model_config.model_name,
+            "model": model_name,
             "status": self.ctx.status.value,
             "current_step": self.ctx.current_step,
-            "meso_context_applied": bool(self.ctx.meso_context),
+            "meso_context_applied": bool(self.ctx.meso_context or self.ctx.market_context),
             "errors_count": len(self.workflow.error_collector.get_errors()),
         }
     
     def _extract_error_info(self, error: Exception) -> Dict[str, Any]:
         """提取错误信息"""
+        # 安全获取 debug 配置
+        debug_mode = getattr(self.workflow.config, 'debug', False)
+        
         return {
             "type": type(error).__name__,
             "message": str(error),
             "step": self.ctx.current_step,
-            "traceback": traceback.format_exc() if self.workflow.config.debug else None,
+            "traceback": traceback.format_exc() if debug_mode else None,
         }
     
     def _get_partial_results(self) -> Dict[str, Any]:
