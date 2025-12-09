@@ -1,0 +1,120 @@
+# ============================================================
+# 节点模型配置文件
+# ============================================================
+# 本文件定义每个 LLM 节点使用的模型及其参数
+# 修改此文件无需更改代码，重启后生效
+
+# ------------------------------------------------------------
+# 全局默认配置
+# ------------------------------------------------------------
+defaults:
+  # API 配置 (可被环境变量覆盖: LLM_API_BASE, LLM_API_KEY)
+  api_base: "https://api.openai.com/v1"
+  api_key: ""  # 建议通过环境变量设置
+  
+  # 默认模型参数
+  model: "gpt-4o"
+  temperature: 0.7
+  max_tokens: 4096
+  top_p: 1.0
+  timeout: 120
+  retry_count: 3
+  
+  # 视觉模型默认参数
+  vision_model: "gpt-4o"
+  vision_detail: "high"  # low, high, auto
+
+# ------------------------------------------------------------
+# 节点特定配置
+# ------------------------------------------------------------
+# 每个节点可以覆盖默认配置中的任意参数
+# 未指定的参数将使用 defaults 中的值
+
+nodes:
+  # 路由节点 - 判断输入类型，任务简单，可用小模型
+  router:
+    model: "gpt-4o-mini"
+    temperature: 0.3      # 低温度，更确定性的输出
+    max_tokens: 1024      # 输出简短
+
+  # 命令生成节点 - 生成 Meso 命令
+  command_generator:
+    model: "gpt-4o-mini"
+    temperature: 0.3
+    max_tokens: 512
+
+  # 数据验证节点 - 需要视觉能力解析图表
+  data_validator:
+    model: "gpt-4o"
+    temperature: 0.5
+    max_tokens: 4096
+    vision_enabled: true
+    vision_detail: "high"
+
+  # 概率校准节点 - 需要较强推理能力
+  probability_calibrator:
+    model: "gpt-4o"
+    temperature: 0.5
+    max_tokens: 2048
+
+  # 策略映射节点 - 核心节点，需要最强模型
+  strategy_mapper:
+    model: "gpt-4o"
+    temperature: 0.7
+    max_tokens: 4096
+
+  # 最终报告节点 - 生成报告
+  final_report:
+    model: "gpt-4o"
+    temperature: 0.7
+    max_tokens: 4096
+
+# ------------------------------------------------------------
+# 模型预设 (可选)
+# ------------------------------------------------------------
+# 定义常用的模型配置预设，节点可以通过 preset 引用
+presets:
+  # 快速响应 - 低成本、低延迟
+  fast:
+    model: "gpt-4o-mini"
+    temperature: 0.3
+    max_tokens: 1024
+  
+  # 标准 - 平衡成本和质量
+  standard:
+    model: "gpt-4o"
+    temperature: 0.7
+    max_tokens: 4096
+  
+  # 高质量 - 最强推理能力
+  quality:
+    model: "gpt-4o"
+    temperature: 0.5
+    max_tokens: 8192
+  
+  # 视觉任务
+  vision:
+    model: "gpt-4o"
+    temperature: 0.5
+    max_tokens: 4096
+    vision_enabled: true
+    vision_detail: "high"
+
+# ------------------------------------------------------------
+# 环境覆盖 (可选)
+# ------------------------------------------------------------
+# 不同环境可以覆盖上述配置
+environments:
+  development:
+    defaults:
+      model: "gpt-4o-mini"  # 开发环境用小模型节省成本
+    nodes:
+      strategy_mapper:
+        model: "gpt-4o-mini"
+      
+  production:
+    defaults:
+      model: "gpt-4o"
+    nodes:
+      strategy_mapper:
+        model: "gpt-4o"  # 生产环境用最强模型
