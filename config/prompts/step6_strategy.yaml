@@ -1,0 +1,314 @@
+# Step 6: 策略生成 Prompt 配置
+# 用于根据决策结果生成具体期权策略
+
+system: |
+  你是一位专业的期权策略设计师，擅长根据市场环境设计最优期权组合。
+  
+  策略设计原则：
+  1. 风险收益匹配：目标盈亏比 ≥ 2:1
+  2. 流动性优先：选择流动性好的行权价
+  3. 希腊值管理：考虑 Delta/Gamma/Theta/Vega 暴露
+  4. 执行可行：给出具体的行权价和 DTE
+  
+  策略类型库：
+  
+  【做多波动率策略】
+  - Long Straddle: ATM Call + ATM Put，最大 Gamma 暴露
+  - Long Strangle: OTM Call + OTM Put，降低成本
+  - Calendar Spread (买近卖远): 利用近月 IV 相对高估
+  - Back Spread: 1:2 比例，有限风险无限收益
+  
+  【做空波动率策略】
+  - Iron Condor: OTM Put Spread + OTM Call Spread，中性策略
+  - Short Strangle: 裸卖 OTM，高风险高收益
+  - Credit Put Spread: 看涨偏向
+  - Credit Call Spread: 看跌偏向
+  - Calendar Spread (买远卖近): 利用近月 IV 相对高估
+  
+  【中性/观望策略】
+  - Butterfly: 低成本方向性押注
+  - Iron Butterfly: 窄幅震荡
+  - Calendar Spread: 等待方向明确
+
+user_template: |
+  请根据决策结果设计具体交易策略。
+  
+  ## 决策信息
+  - 决策: {decision}
+  - 置信度: {confidence}
+  - 概率分布: Long={p_long}%, Short={p_short}%, Hold={p_hold}%
+  - 目标盈亏比: {target_rr}:1
+  
+  ## 标的数据
+  - Symbol: {symbol}
+  - 现价: ${spot_price}
+  - ATM IV: {iv_atm}%
+  - 近月 IV: {iv_front}%
+  - 远月 IV: {iv_back}%
+  - HV20: {hv20}%
+  - VRP: {vrp}%
+  
+  ## 关键价位
+  - VOL_TRIGGER: ${vol_trigger}
+  - Gamma Wall: ${gamma_wall}
+  - Put Wall: ${put_wall}
+  - Call Wall: ${call_wall}
+  - Max Pain: ${max_pain}
+  
+  ## GEX 环境
+  - Net GEX: {net_gex}
+  - Pin Risk: {pin_risk}
+  - Gamma Wall 距离: {gamma_wall_prox}%
+  
+  ## 期限结构
+  - Term Slope: {term_slope}%
+  - Term Regime: {term_regime}
+  
+  ## Skew
+  - Put Skew 25D: {put_skew_25}%
+  - Call Skew 25D: {call_skew_25}%
+  - Skew Asymmetry: {skew_asym}
+  
+  请设计主策略和备选策略，严格按照 JSON Schema 输出。
+
+json_schema:
+  type: object
+  required:
+    - primary_strategy
+    - alternatives
+    - execution
+    - greeks_profile
+    - risk_management
+  properties:
+    primary_strategy:
+      type: object
+      required:
+        - name
+        - type
+        - risk_profile
+        - rationale
+      properties:
+        name:
+          type: string
+          description: 策略名称
+        type:
+          type: string
+          enum:
+            - long_straddle
+            - long_strangle
+            - short_straddle
+            - short_strangle
+            - iron_condor
+            - iron_butterfly
+            - credit_put_spread
+            - credit_call_spread
+            - debit_put_spread
+            - debit_call_spread
+            - calendar_spread
+            - diagonal_spread
+            - back_spread
+            - butterfly
+          description: 策略类型
+        risk_profile:
+          type: string
+          enum:
+            - aggressive
+            - balanced
+            - conservative
+          description: 风险等级
+        rationale:
+          type: string
+          description: 选择此策略的理由
+    
+    alternatives:
+      type: array
+      minItems: 1
+      maxItems: 2
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+          type:
+            type: string
+          condition:
+            type: string
+            description: 在什么情况下使用此备选
+    
+    execution:
+      type: object
+      required:
+        - legs
+        - dte_range
+        - entry_conditions
+        - exit_conditions
+      properties:
+        legs:
+          type: array
+          minItems: 1
+          maxItems: 4
+          items:
+            type: object
+            required:
+              - action
+              - option_type
+              - strike_selection
+              - quantity
+            properties:
+              action:
+                type: string
+                enum:
+                  - buy
+                  - sell
+              option_type:
+                type: string
+                enum:
+                  - call
+                  - put
+              strike_selection:
+                type: string
+                description: 行权价选择方法，如 "ATM", "ATM+5", "25D Put", "Gamma Wall"
+              strike_price:
+                type: number
+                description: 具体行权价（如果可确定）
+              delta_target:
+                type: number
+                description: 目标 Delta
+              quantity:
+                type: integer
+                description: 数量
+        
+        dte_range:
+          type: object
+          properties:
+            min:
+              type: integer
+            max:
+              type: integer
+            optimal:
+              type: integer
+        
+        entry_conditions:
+          type: array
+          items:
+            type: string
+          description: 入场条件清单
+        
+        exit_conditions:
+          type: array
+          items:
+            type: string
+          description: 出场条件清单
+    
+    greeks_profile:
+      type: object
+      properties:
+        delta:
+          type: string
+          description: Delta 暴露描述
+        gamma:
+          type: string
+          description: Gamma 暴露描述
+        theta:
+          type: string
+          description: Theta 暴露描述
+        vega:
+          type: string
+          description: Vega 暴露描述
+    
+    risk_management:
+      type: object
+      required:
+        - max_loss
+        - target_profit
+        - reward_risk_ratio
+      properties:
+        max_loss:
+          type: number
+          description: 最大损失（相对于本金的比例）
+        target_profit:
+          type: number
+          description: 目标利润（相对于本金的比例）
+        reward_risk_ratio:
+          type: number
+          description: 盈亏比
+        stop_loss_trigger:
+          type: string
+          description: 止损触发条件
+        position_sizing:
+          type: string
+          description: 仓位建议
+
+# 示例输出
+example_output:
+  primary_strategy:
+    name: Iron Condor
+    type: iron_condor
+    risk_profile: balanced
+    rationale: |
+      Positive GEX 环境压制波动，VRP 正值支持做空波动率。
+      Iron Condor 提供有限风险的双向卖权收益。
+  
+  alternatives:
+    - name: Credit Put Spread
+      type: credit_put_spread
+      condition: 如果市场偏多，可单边做 Put Spread
+    - name: Short Strangle
+      type: short_strangle
+      condition: 如果流动性更好且风险承受能力强
+  
+  execution:
+    legs:
+      - action: sell
+        option_type: put
+        strike_selection: Put Wall 附近
+        strike_price: 180
+        delta_target: -0.20
+        quantity: 1
+      - action: buy
+        option_type: put
+        strike_selection: Put Wall - $5
+        strike_price: 175
+        delta_target: -0.10
+        quantity: 1
+      - action: sell
+        option_type: call
+        strike_selection: Call Wall 附近
+        strike_price: 195
+        delta_target: 0.20
+        quantity: 1
+      - action: buy
+        option_type: call
+        strike_selection: Call Wall + $5
+        strike_price: 200
+        delta_target: 0.10
+        quantity: 1
+    
+    dte_range:
+      min: 30
+      max: 45
+      optimal: 35
+    
+    entry_conditions:
+      - IV > HV20 + 3%
+      - 无重大事件在 DTE 内
+      - Spread 收窄至 < 5%
+    
+    exit_conditions:
+      - 达到 50% 利润
+      - 达到 200% 损失
+      - DTE < 7
+      - 突破任一 Wall
+  
+  greeks_profile:
+    delta: 中性，接近 0
+    gamma: 负 Gamma，接近 Gamma Wall 时增加
+    theta: 正 Theta，每日收取时间价值
+    vega: 负 Vega，IV 下降获利
+  
+  risk_management:
+    max_loss: 0.02
+    target_profit: 0.01
+    reward_risk_ratio: 2.0
+    stop_loss_trigger: 标的价格触及任一行权价
+    position_sizing: 单笔风险不超过账户 2%

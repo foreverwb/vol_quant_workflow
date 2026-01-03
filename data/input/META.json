@@ -1,0 +1,44 @@
+{
+  "_schema_version": "2.0",
+  "symbol": "META",
+  "timestamp": "2026-01-03 10:30:00",
+  "spot": 612.50,
+  "core_fields": {
+    "gamma_regime": {
+      "vol_trigger": 610.00,
+      "net_gex_sign": "positive",
+      "net_dex_sign": "bullish",
+      "total_net_gex": 950000000
+    },
+    "key_levels": {
+      "gamma_wall": 615.00,
+      "call_wall": 630.00,
+      "put_wall": 595.00,
+      "max_pain": 610.00,
+      "major_oi_strikes": [595, 600, 610, 615, 620, 630]
+    },
+    "iv_hv": {
+      "iv_atm": 32.5,
+      "iv_front": 33.0,
+      "iv_back": 30.5,
+      "hv10": 28.5,
+      "hv20": 26.0,
+      "hv60": 25.0
+    },
+    "structure": {
+      "vex_net": -0.18,
+      "vanna_atm": 0.05,
+      "term_slope": 2.5,
+      "put_skew_25": 4.5,
+      "call_skew_25": -1.2,
+      "spread_atm": 0.035,
+      "pcr_ratio": 0.85,
+      "smile_curvature": 0.12
+    }
+  },
+  "enhanced": {
+    "vvix": 19.5,
+    "vix9d": 17.0,
+    "vix": 16.5
+  }
+}
