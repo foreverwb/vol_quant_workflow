@@ -1,0 +1,6 @@
+#!/bin/bash
+# 快捷命令: 快速更新
+# 用法: update AAPL
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec python3 "$SCRIPT_DIR/main.py" update "$@"

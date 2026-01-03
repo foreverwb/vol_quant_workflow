@@ -1,0 +1,63 @@
+{
+  "_schema_version": "2.0",
+  "_description": "数据模板文件 - 复制此文件并重命名为 {SYMBOL}.json",
+  "_field_sources": {
+    "vol_trigger": "!trigger {symbol} 98",
+    "gamma_wall": "!gexr {symbol} 15 98",
+    "call_wall": "!gexr {symbol} 15 98",
+    "put_wall": "!gexr {symbol} 15 98",
+    "iv_atm": "!surface {symbol} ivmid 98",
+    "iv_front": "!surface {symbol} ivmid 98 (近月)",
+    "iv_back": "!surface {symbol} ivmid 98 (远月)",
+    "vex_net": "!vexn {symbol} 15 190 *",
+    "put_skew_25": "!skew {symbol} ivmid atm 30",
+    "call_skew_25": "!skew {symbol} ivmid atm 30",
+    "spread_atm": "!surface {symbol} spread atm 98",
+    "hv10/20/60": "TradingView 或手动计算"
+  },
+  "symbol": "SYMBOL",
+  "timestamp": "2026-01-03 10:30:00",
+  "spot": null,
+  "core_fields": {
+    "gamma_regime": {
+      "vol_trigger": null,
+      "net_gex_sign": null,
+      "net_dex_sign": null,
+      "total_net_gex": null
+    },
+    "key_levels": {
+      "gamma_wall": null,
+      "gamma_wall_2": null,
+      "call_wall": null,
+      "put_wall": null,
+      "max_pain": null,
+      "major_oi_strikes": []
+    },
+    "iv_hv": {
+      "iv_atm": null,
+      "iv_front": null,
+      "iv_back": null,
+      "iv_event_w": null,
+      "hv10": null,
+      "hv20": null,
+      "hv60": null
+    },
+    "structure": {
+      "vex_net": null,
+      "vanna_atm": null,
+      "term_slope": null,
+      "put_skew_25": null,
+      "call_skew_25": null,
+      "spread_atm": null,
+      "pcr_ratio": null,
+      "smile_curvature": null
+    }
+  },
+  "enhanced": {
+    "vvix": null,
+    "vix9d": null,
+    "vix": null,
+    "ask_premium_pct": null,
+    "corr_idx": null
+  }
+}
