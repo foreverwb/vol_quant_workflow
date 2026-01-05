@@ -1,314 +1,358 @@
 """
-核心类型定义模块
-包含所有数据类、枚举、类型别名
+Type definitions for the volatility strategy system.
+Defines the 22 core input fields and output structures.
 """
+
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Dict, List, Optional, Any, Union
 from datetime import datetime
+from typing import Optional, List, Dict, Any
+from enum import Enum
 
 
 # =============================================================================
-# 枚举定义
-# =============================================================================
-
-class EventType(Enum):
-    """事件类型"""
-    NONE = "none"
-    EARNINGS = "earnings"
-    FOMC = "fomc"
-    CPI = "cpi"
-    NFP = "nfp"
-    OPEX = "opex"
-    MACRO = "macro"
-
-
-class Decision(Enum):
-    """交易决策"""
-    LONG_VOL = "long_vol"
-    SHORT_VOL = "short_vol"
-    HOLD = "hold"
-
-
-class Confidence(Enum):
-    """置信度"""
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-
-
-class GEXRegime(Enum):
-    """GEX 环境"""
-    POSITIVE = "positive"
-    NEGATIVE = "negative"
-    NEUTRAL = "neutral"
-
-
-class TermStructure(Enum):
-    """期限结构"""
-    CONTANGO = "contango"
-    BACKWARDATION = "backwardation"
-    FLAT = "flat"
-
-
-class VRPRegime(Enum):
-    """VRP 状态"""
-    LONG_BIAS = "long_bias"
-    SHORT_BIAS = "short_bias"
-    FAIR = "fair"
-
-
-class SkewRegime(Enum):
-    """Skew 状态"""
-    PUT_HEAVY = "put_heavy"
-    CALL_HEAVY = "call_heavy"
-    BALANCED = "balanced"
-
-
-class StrategyType(Enum):
-    """策略类型"""
-    LONG_STRADDLE = "long_straddle"
-    LONG_STRANGLE = "long_strangle"
-    SHORT_STRADDLE = "short_straddle"
-    SHORT_STRANGLE = "short_strangle"
-    IRON_CONDOR = "iron_condor"
-    IRON_BUTTERFLY = "iron_butterfly"
-    CREDIT_PUT_SPREAD = "credit_put_spread"
-    CREDIT_CALL_SPREAD = "credit_call_spread"
-    DEBIT_PUT_SPREAD = "debit_put_spread"
-    DEBIT_CALL_SPREAD = "debit_call_spread"
-    CALENDAR_SPREAD = "calendar_spread"
-    DIAGONAL_SPREAD = "diagonal_spread"
-    BUTTERFLY = "butterfly"
-
-
-class RiskProfile(Enum):
-    """风险等级"""
-    AGGRESSIVE = "aggressive"
-    BALANCED = "balanced"
-    CONSERVATIVE = "conservative"
-
-
-class ValidationStatus(Enum):
-    """校验状态"""
-    VALID = "valid"
-    MISSING = "missing"
-    INVALID = "invalid"
-    ESTIMATED = "estimated"
-    PROXY = "proxy"
-
-
-class FieldPriority(Enum):
-    """字段优先级"""
-    CRITICAL = "critical"
-    HIGH = "high"
-    OPTIONAL = "optional"
-
-
-class DataStatus(Enum):
-    """数据状态"""
-    DATA_READY = "data_ready"
-    MISSING_CRITICAL = "missing_critical"
-    MISSING_HIGH = "missing_high"
-    MISSING_OPTIONAL = "missing_optional"
-
-
-# =============================================================================
-# 数据类定义
+# INPUT DATA STRUCTURES (22 CORE FIELDS)
 # =============================================================================
 
 @dataclass
-class MarketData:
-    """市场数据"""
+class MetaFields:
+    """Meta information fields."""
     symbol: str
+    datetime: str  # ISO format ET timestamp
+
+
+@dataclass
+class MarketFields:
+    """Market price fields."""
     spot: float
-    timestamp: Optional[str] = None
-    
-    # Gamma Regime
-    vol_trigger: Optional[float] = None
-    net_gex_sign: Optional[GEXRegime] = None
-    total_net_gex: Optional[float] = None
-    
-    # Key Levels
-    gamma_wall: Optional[float] = None
-    gamma_wall_2: Optional[float] = None
-    call_wall: Optional[float] = None
-    put_wall: Optional[float] = None
-    max_pain: Optional[float] = None
-    
-    # IV/HV
-    iv_atm: Optional[float] = None
-    iv_front: Optional[float] = None
-    iv_back: Optional[float] = None
-    iv_event_w: Optional[float] = None
-    hv10: Optional[float] = None
-    hv20: Optional[float] = None
-    hv60: Optional[float] = None
-    
-    # Structure
-    vex_net: Optional[float] = None
-    vanna_atm: Optional[float] = None
-    term_slope: Optional[float] = None
-    put_skew_25: Optional[float] = None
-    call_skew_25: Optional[float] = None
-    spread_atm: Optional[float] = None
-    pcr_ratio: Optional[float] = None
-    
-    # Enhanced
-    vvix: Optional[float] = None
-    vix9d: Optional[float] = None
-    vix: Optional[float] = None
 
 
 @dataclass
-class FieldValidation:
-    """字段校验结果"""
-    field_name: str
-    value: Any
-    status: ValidationStatus
-    source: str = "user_input"
-    notes: Optional[str] = None
-    confidence: float = 1.0
+class RegimeFields:
+    """Regime detection fields (VOL TRIGGER based)."""
+    vol_trigger: float
+    net_gex_sign: int  # +1, -1, or 0
+    gamma_wall_call: float
+    gamma_wall_put: float
+    gamma_wall_proximity_pct: float
 
 
 @dataclass
-class Features:
-    """计算特征"""
-    # VRP
-    vrp_hv20: Optional[float] = None
-    vrp_hv10: Optional[float] = None
-    vrp_selected: Optional[float] = None
-    vrp_regime: Optional[VRPRegime] = None
-    
-    # Term Structure
-    term_slope: Optional[float] = None
-    term_regime: Optional[TermStructure] = None
-    
-    # GEX
-    gex_level: Optional[int] = None
-    gamma_wall_prox: Optional[float] = None
-    is_pin_risk: bool = False
-    net_gex_regime: Optional[GEXRegime] = None
-    
-    # Skew
-    skew_asym: Optional[float] = None
-    skew_regime: Optional[SkewRegime] = None
-    
-    # Momentum
-    rv_momo: Optional[float] = None
-    
-    # Liquidity
-    liquidity_score: Optional[float] = None
-    
-    # VoV
-    vov_level: Optional[float] = None
+class VolatilityFields:
+    """Volatility measurement fields."""
+    iv_event_atm: Optional[float]  # Event week ATM IV
+    iv_m1_atm: float               # Front month ATM IV
+    iv_m2_atm: Optional[float]     # Back month ATM IV
+    hv10: float                    # 10-day Yang-Zhang HV
+    hv20: float                    # 20-day Yang-Zhang HV  
+    hv60: float                    # 60-day Yang-Zhang HV
 
 
 @dataclass
-class SignalScore:
-    """单个信号得分"""
-    name: str
-    raw_score: float
-    weight_long: float
-    weight_short: float
-    contribution_long: float
-    contribution_short: float
-    notes: Optional[str] = None
+class StructureFields:
+    """Term structure and skew fields."""
+    term_slope: float          # IV term structure slope
+    term_curvature: float      # IV term structure curvature
+    skew_asymmetry: float      # Put-call skew asymmetry
+    vex_net_5_60: float        # Net vanna exposure 5-60 DTE
+    vanna_atm_abs: float       # Absolute ATM vanna
 
 
 @dataclass
-class Scores:
-    """综合评分"""
+class LiquidityFields:
+    """Liquidity and execution quality fields."""
+    spread_atm: float          # ATM bid-ask spread
+    iv_ask_premium_pct: float  # IV ask premium percentage
+    liquidity_flag: str        # "good" / "fair" / "poor"
+
+
+@dataclass
+class InputData:
+    """
+    Complete input data structure containing all 22 core fields.
+    This is the only valid input contract for Step3.
+    """
+    meta: MetaFields
+    market: MarketFields
+    regime: RegimeFields
+    volatility: VolatilityFields
+    structure: StructureFields
+    liquidity: LiquidityFields
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "meta": {
+                "symbol": self.meta.symbol,
+                "datetime": self.meta.datetime,
+            },
+            "market": {
+                "spot": self.market.spot,
+            },
+            "regime": {
+                "vol_trigger": self.regime.vol_trigger,
+                "net_gex_sign": self.regime.net_gex_sign,
+                "gamma_wall_call": self.regime.gamma_wall_call,
+                "gamma_wall_put": self.regime.gamma_wall_put,
+                "gamma_wall_proximity_pct": self.regime.gamma_wall_proximity_pct,
+            },
+            "volatility": {
+                "iv_event_atm": self.volatility.iv_event_atm,
+                "iv_m1_atm": self.volatility.iv_m1_atm,
+                "iv_m2_atm": self.volatility.iv_m2_atm,
+                "hv10": self.volatility.hv10,
+                "hv20": self.volatility.hv20,
+                "hv60": self.volatility.hv60,
+            },
+            "structure": {
+                "term_slope": self.structure.term_slope,
+                "term_curvature": self.structure.term_curvature,
+                "skew_asymmetry": self.structure.skew_asymmetry,
+                "vex_net_5_60": self.structure.vex_net_5_60,
+                "vanna_atm_abs": self.structure.vanna_atm_abs,
+            },
+            "liquidity": {
+                "spread_atm": self.liquidity.spread_atm,
+                "iv_ask_premium_pct": self.liquidity.iv_ask_premium_pct,
+                "liquidity_flag": self.liquidity.liquidity_flag,
+            },
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "InputData":
+        """Create InputData from dictionary."""
+        return cls(
+            meta=MetaFields(
+                symbol=data["meta"]["symbol"],
+                datetime=data["meta"]["datetime"],
+            ),
+            market=MarketFields(
+                spot=data["market"]["spot"],
+            ),
+            regime=RegimeFields(
+                vol_trigger=data["regime"]["vol_trigger"],
+                net_gex_sign=data["regime"]["net_gex_sign"],
+                gamma_wall_call=data["regime"]["gamma_wall_call"],
+                gamma_wall_put=data["regime"]["gamma_wall_put"],
+                gamma_wall_proximity_pct=data["regime"]["gamma_wall_proximity_pct"],
+            ),
+            volatility=VolatilityFields(
+                iv_event_atm=data["volatility"].get("iv_event_atm"),
+                iv_m1_atm=data["volatility"]["iv_m1_atm"],
+                iv_m2_atm=data["volatility"].get("iv_m2_atm"),
+                hv10=data["volatility"]["hv10"],
+                hv20=data["volatility"]["hv20"],
+                hv60=data["volatility"]["hv60"],
+            ),
+            structure=StructureFields(
+                term_slope=data["structure"]["term_slope"],
+                term_curvature=data["structure"]["term_curvature"],
+                skew_asymmetry=data["structure"]["skew_asymmetry"],
+                vex_net_5_60=data["structure"]["vex_net_5_60"],
+                vanna_atm_abs=data["structure"]["vanna_atm_abs"],
+            ),
+            liquidity=LiquidityFields(
+                spread_atm=data["liquidity"]["spread_atm"],
+                iv_ask_premium_pct=data["liquidity"]["iv_ask_premium_pct"],
+                liquidity_flag=data["liquidity"]["liquidity_flag"],
+            ),
+        )
+
+
+# =============================================================================
+# OUTPUT DATA STRUCTURES
+# =============================================================================
+
+@dataclass
+class SignalScores:
+    """Individual signal scores (all normalized to 'long vol positive')."""
+    s_vrp: float = 0.0
+    s_gex: float = 0.0
+    s_vex: float = 0.0
+    s_carry: float = 0.0
+    s_skew: float = 0.0
+    s_vanna: float = 0.0
+    s_rv: float = 0.0
+    s_liq: float = 0.0
+    # Enhanced signals (optional)
+    s_vov: Optional[float] = None
+    s_vix_ts: Optional[float] = None
+    s_rim: Optional[float] = None
+    s_compress: Optional[float] = None
+    s_eir_long: Optional[float] = None
+    s_eir_short: Optional[float] = None
+    s_corr_idx: Optional[float] = None
+    s_flow_putcrowd: Optional[float] = None
+
+
+@dataclass
+class CompositeScores:
+    """Aggregated long/short volatility scores."""
     long_vol_score: float
     short_vol_score: float
-    dominant_direction: str
-    score_diff: float
-    confidence_pct: float
-    signal_breakdown: Dict[str, SignalScore] = field(default_factory=dict)
 
 
 @dataclass
-class Probability:
-    """概率分布"""
-    p_long: float
-    p_short: float
-    p_hold: float
+class ProbabilityEstimates:
+    """Calibrated probability estimates."""
+    p_long: float           # P(RV > IV | L score)
+    p_short: float          # P(RV < IV | S score)
+    p_long_range: tuple     # (low, high) confidence interval
+    p_short_range: tuple    # (low, high) confidence interval
+    calibration_method: str # "cold_start" | "platt" | "isotonic"
 
 
 @dataclass
-class DecisionResult:
-    """决策结果"""
-    decision: Decision
-    probability: Probability
-    confidence: Confidence
-    rationale: str
-    key_factors: List[str]
-    risk_notes: List[str]
-    suggested_strategy: Optional[str] = None
-
-
-@dataclass
-class OptionLeg:
-    """期权腿"""
-    action: str  # buy/sell
-    option_type: str  # call/put
-    strike: float
-    delta: Optional[float] = None
-    quantity: int = 1
-    premium: Optional[float] = None
-
-
-@dataclass
-class Strategy:
-    """交易策略"""
-    name: str
-    type: StrategyType
-    risk_profile: RiskProfile
-    rationale: str
-    legs: List[OptionLeg] = field(default_factory=list)
-    dte_min: int = 0
-    dte_max: int = 45
-    dte_optimal: int = 30
-    entry_conditions: List[str] = field(default_factory=list)
-    exit_conditions: List[str] = field(default_factory=list)
-    max_loss: Optional[float] = None
-    target_profit: Optional[float] = None
-    reward_risk: Optional[float] = None
-
-
-@dataclass
-class EdgeMetrics:
-    """Edge 指标"""
-    win_rate: float
-    avg_win: float
-    avg_loss: float
-    expected_value: float
-    reward_risk: float
-    max_drawdown: float
-    sharpe_ratio: Optional[float] = None
-    is_profitable: bool = False
-    confidence_interval: Optional[tuple] = None
+class StrategyCandidate:
+    """A candidate strategy with Edge/EV estimates."""
+    name: str                    # e.g., "long_straddle", "iron_condor"
+    tier: str                    # "aggressive" | "balanced" | "conservative"
+    direction: str               # "long_vol" | "short_vol"
+    dte_range: tuple             # (min_dte, max_dte)
+    delta_targets: Dict[str, float]  # {"buy": 0.35, "sell": 0.15}
+    strike_anchors: Dict[str, str]   # {"buy": "atm", "sell": "gamma_wall"}
+    expected_rr: float           # Expected reward:risk ratio
+    win_rate: float              # Estimated win rate
+    ev: float                    # Expected value (after costs)
+    entry_triggers: List[str]    # Conditions for entry
+    exit_triggers: List[str]     # Conditions for exit
+    cost_adjustment: float       # Spread/slippage penalty
+    is_executable: bool          # Passes all gates?
 
 
 @dataclass 
-class AnalysisResult:
-    """完整分析结果"""
-    symbol: str
+class DecisionOutput:
+    """Final decision output structure."""
+    decision: str              # "LONG_VOL" | "SHORT_VOL" | "STAND_ASIDE"
+    confidence: float          # 0-1 confidence level
+    primary_reasons: List[str] # Key factors driving decision
+    scores: CompositeScores
+    signal_breakdown: SignalScores
+    probabilities: ProbabilityEstimates
+    candidates: List[StrategyCandidate]
+    selected_strategy: Optional[StrategyCandidate]
     timestamp: str
-    market_data: MarketData
-    features: Features
-    scores: Scores
-    decision: DecisionResult
-    strategy: Strategy
-    edge: EdgeMetrics
-    data_quality: float
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    warnings: List[str]
+    missing_fields: List[str]
 
 
-# =============================================================================
-# 类型别名
-# =============================================================================
+@dataclass
+class UpdateOutput:
+    """Lightweight update output (no strategy/probability)."""
+    timestamp: str
+    regime_state: str          # "positive_gamma" | "negative_gamma" | "neutral"
+    regime_changed: bool       # True if regime flipped since last update
+    vol_trigger: float
+    spot: float
+    gamma_wall_proximity_pct: float
+    key_metrics: Dict[str, float]  # VRP, term slope, etc.
+    alerts: List[str]          # Any threshold crossings
 
-FieldMap = Dict[str, FieldValidation]
-SignalMap = Dict[str, SignalScore]
-ConfigDict = Dict[str, Any]
+
+@dataclass
+class OutputData:
+    """
+    Complete output cache structure.
+    Contains all pipeline outputs and intermediate states.
+    """
+    symbol: str
+    date: str
+    last_update: str
+    updates: List[UpdateOutput]
+    full_analysis: Optional[DecisionOutput]
+    gexbot_commands: List[str]
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "symbol": self.symbol,
+            "date": self.date,
+            "last_update": self.last_update,
+            "updates": [
+                {
+                    "timestamp": u.timestamp,
+                    "regime_state": u.regime_state,
+                    "regime_changed": u.regime_changed,
+                    "vol_trigger": u.vol_trigger,
+                    "spot": u.spot,
+                    "gamma_wall_proximity_pct": u.gamma_wall_proximity_pct,
+                    "key_metrics": u.key_metrics,
+                    "alerts": u.alerts,
+                }
+                for u in self.updates
+            ],
+            "full_analysis": self._decision_to_dict(self.full_analysis) if self.full_analysis else None,
+            "gexbot_commands": self.gexbot_commands,
+        }
+    
+    def _decision_to_dict(self, d: DecisionOutput) -> Dict[str, Any]:
+        """Convert DecisionOutput to dict."""
+        return {
+            "decision": d.decision,
+            "confidence": d.confidence,
+            "primary_reasons": d.primary_reasons,
+            "scores": {
+                "long_vol_score": d.scores.long_vol_score,
+                "short_vol_score": d.scores.short_vol_score,
+            },
+            "signal_breakdown": {
+                "s_vrp": d.signal_breakdown.s_vrp,
+                "s_gex": d.signal_breakdown.s_gex,
+                "s_vex": d.signal_breakdown.s_vex,
+                "s_carry": d.signal_breakdown.s_carry,
+                "s_skew": d.signal_breakdown.s_skew,
+                "s_vanna": d.signal_breakdown.s_vanna,
+                "s_rv": d.signal_breakdown.s_rv,
+                "s_liq": d.signal_breakdown.s_liq,
+                "s_vov": d.signal_breakdown.s_vov,
+                "s_vix_ts": d.signal_breakdown.s_vix_ts,
+                "s_rim": d.signal_breakdown.s_rim,
+                "s_compress": d.signal_breakdown.s_compress,
+                "s_eir_long": d.signal_breakdown.s_eir_long,
+                "s_eir_short": d.signal_breakdown.s_eir_short,
+                "s_corr_idx": d.signal_breakdown.s_corr_idx,
+                "s_flow_putcrowd": d.signal_breakdown.s_flow_putcrowd,
+            },
+            "probabilities": {
+                "p_long": d.probabilities.p_long,
+                "p_short": d.probabilities.p_short,
+                "p_long_range": d.probabilities.p_long_range,
+                "p_short_range": d.probabilities.p_short_range,
+                "calibration_method": d.probabilities.calibration_method,
+            },
+            "candidates": [
+                {
+                    "name": c.name,
+                    "tier": c.tier,
+                    "direction": c.direction,
+                    "dte_range": c.dte_range,
+                    "delta_targets": c.delta_targets,
+                    "strike_anchors": c.strike_anchors,
+                    "expected_rr": c.expected_rr,
+                    "win_rate": c.win_rate,
+                    "ev": c.ev,
+                    "entry_triggers": c.entry_triggers,
+                    "exit_triggers": c.exit_triggers,
+                    "cost_adjustment": c.cost_adjustment,
+                    "is_executable": c.is_executable,
+                }
+                for c in d.candidates
+            ],
+            "selected_strategy": {
+                "name": d.selected_strategy.name,
+                "tier": d.selected_strategy.tier,
+                "direction": d.selected_strategy.direction,
+                "dte_range": d.selected_strategy.dte_range,
+                "delta_targets": d.selected_strategy.delta_targets,
+                "strike_anchors": d.selected_strategy.strike_anchors,
+                "expected_rr": d.selected_strategy.expected_rr,
+                "win_rate": d.selected_strategy.win_rate,
+                "ev": d.selected_strategy.ev,
+                "entry_triggers": d.selected_strategy.entry_triggers,
+                "exit_triggers": d.selected_strategy.exit_triggers,
+                "cost_adjustment": d.selected_strategy.cost_adjustment,
+                "is_executable": d.selected_strategy.is_executable,
+            } if d.selected_strategy else None,
+            "timestamp": d.timestamp,
+            "warnings": d.warnings,
+            "missing_fields": d.missing_fields,
+        }

@@ -1,0 +1,71 @@
+# ========================================
+# 多模型编排配置
+# 支持为不同 Agent 配置不同的模型
+# ========================================
+
+# === 默认模型配置（全局） ===
+default:
+  provider: openai               # 默认提供商
+  model: DeepSeek-V3.2-Thinking                 # 默认模型                # 从环境变量 DMXAPI_KEY 读取
+  base_url: "https://www.dmxapi.cn/v1"
+  temperature: 0.3
+  max_tokens: 4096
+  timeout: 360
+
+# === Agent 特定模型配置 ===
+# 每个 Agent 可以覆盖默认配置，使用不同的模型
+
+agents:
+  # Agent 3: 数据校验（需要视觉能力）
+  agent3:
+    provider: openai
+    model: Qwen3-VL-235B-A22B-Instruct    # 需要视觉支持 gpt-4.1-mini-2025-04-14  gpt-4.1-2025-04-14 gpt-4o-2024-11-20
+    max_tokens: 8192
+    temperature: 0
+    top_p: 1
+    presence_penalty: 0
+    frequency_penalty: 0
+    supports_vision: true
+  
+  # Agent 5: 场景分析（复杂推理，使用高级模型）
+  agent5:
+    provider: openai
+    model: DeepSeek-V3.2-Thinking # DeepSeek-V3.2-Thinking
+    temperature: 0.3
+    max_tokens: 8192
+  
+  # Agent 6: 策略生成（高级推理）
+  agent6:
+    provider: openai
+    model: DeepSeek-V3.2-Thinking
+    temperature: 0.4
+    max_tokens: 8192
+  
+  # # Agent 7: 策略排序
+  # agent7:
+  #   provider: openai
+  #   model: DeepSeek-V3.2-Thinking
+  #   temperature: 0.5
+  #   max_tokens: 3072
+  
+  # Agent 8: 最终报告（需要优秀的写作能力）
+  agent8:
+    provider: openai
+    model: DeepSeek-V3.2-Thinking 
+    temperature: 0.5
+    max_tokens: 8192
+
+# 重试配置
+max_retries: 3
+retry_delay: 2
+retry_exponential_backoff: true
+
+# 日志配置
+log_api_calls: true
+log_token_usage: true
+log_latency: true
+
+# 成本控制（可选）
+cost_tracking:
+  enabled: true
+  alert_threshold_usd: 10.0    # 单次运行超过$10告警
