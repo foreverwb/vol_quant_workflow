@@ -138,6 +138,7 @@ class Settings:
     gamma_wall: GammaWallSettings = field(default_factory=GammaWallSettings)
     rim: RIMSettings = field(default_factory=RIMSettings)
     log: LogSettings = field(default_factory=LogSettings)
+    va_api_base: str = "http://127.0.0.1:8668"
     
     @classmethod
     def load(cls, env_path: Optional[str] = None) -> "Settings":
@@ -197,6 +198,7 @@ class Settings:
                 level=get("LOG_LEVEL", "INFO"),
                 file=get("LOG_FILE", "vol_quant.log"),
             ),
+            va_api_base=get("VA_API_BASE", "http://127.0.0.1:8668"),
         )
     
     def to_dict(self) -> Dict[str, Any]:
@@ -244,6 +246,7 @@ class Settings:
                 "active_threshold": self.rim.active_threshold,
                 "weak_threshold": self.rim.weak_threshold,
             },
+            "va_api_base": self.va_api_base,
         }
 
 

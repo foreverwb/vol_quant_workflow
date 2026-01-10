@@ -1,0 +1,67 @@
+contexts:
+  standard:
+    - "!gexn {symbol} {strikes} {dte_gex}"
+    - "!gexr {symbol} {strikes} {dte_gex}"
+    - "!vexn {symbol} {strikes} {dte_vex} {exp_all}"
+    - "!vanna {symbol} atm {dte_vanna_atm} {exp_all}"
+    - "!vanna {symbol} ntm {dte_vanna_ntm}"
+    - "!trigger {symbol} {dte_trigger}"
+    - "!term {symbol} {dte_term} {exp_w}"
+    - "!term {symbol} {dte_term} {exp_m}"
+    - "!skew {symbol} ivmid atm {dte_skew}"
+    - "!skew {symbol} ivmid ntm {dte_skew}"
+    - "!skew {symbol} ivmid put {dte_skew} {exp_w}"
+    - "!surface {symbol} ivmid {dte_gex}"
+    - "!surface {symbol} ivmid ntm {dte_gex}"
+    - "!surface {symbol} ivask ntm {dte_gex}"
+    - "!surface {symbol} spread atm {dte_gex}"
+    - "!surface {symbol} extrinsic ntm {dte_extrinsic_ntm} {exp_w}"
+    - "!surface {symbol} gex ntm {dte_gex}"
+    - "!surface {symbol} vex ntm {dte_vex}"
+
+  minimum:
+    - "!trigger {symbol} {dte_trigger}"
+    - "!gexr {symbol} {strikes} {dte_gex}"
+    - "!vexn {symbol} {strikes} {dte_vex} {exp_all}"
+    - "!surface {symbol} ivmid {dte_gex}"
+    - "!surface {symbol} ivask ntm {dte_gex}"
+    - "!surface {symbol} spread atm {dte_gex}"
+    - "!skew {symbol} ivmid atm {dte_skew}"
+
+  event:
+    - "!trigger {symbol} {dte_trigger}"
+    - "!gexn {symbol} {strikes} {dte_gex}"
+    - "!gexr {symbol} {strikes} {dte_gex}"
+    - "!vexn {symbol} {strikes} {dte_vex} {exp_all}"
+    - "!surface {symbol} ivmid {dte_gex}"
+    - "!surface {symbol} extrinsic ntm {dte_extrinsic_ntm} {exp_w}"
+    - "!surface {symbol} theta atm {dte_theta_atm} {exp_w}"
+
+  intraday:
+    - "!trigger {symbol} {dte_trigger}"
+    - "!gexr {symbol} {strikes} {dte_gex}"
+    - "!surface {symbol} gamma atm {dte_gamma_surface} {exp_w}"
+    - "!surface {symbol} spread atm {dte_gex}"
+    - "!surface {symbol} ivask ntm {dte_gex}"
+    - "!skew {symbol} ivmid atm {dte_skew}"
+
+  post_event:
+    - "!trigger {symbol} {dte_trigger}"
+    - "!surface {symbol} ivmid {dte_gex}"
+    - "!surface {symbol} extrinsic ntm {dte_extrinsic_ntm} {exp_w}"
+    - "!vexn {symbol} {strikes} {dte_vex} {exp_all}"
+    - "!surface {symbol} theta atm {dte_theta_atm} {exp_w}"
+    - "!vanna {symbol} atm {dte_vanna_atm} {exp_all}"
+
+  long_term:
+    - "!term {symbol} {dte_term} {exp_w}"
+    - "!term {symbol} {dte_term} {exp_m}"
+    - "!surface {symbol} vega atm {dte_vega_surface}"
+    - "!surface {symbol} rho atm {dte_vex}"
+    - "!vexn {symbol} {strikes} {dte_vex} {exp_all}"
+
+  diagnostic:
+    - "!surface {symbol} gamma atm {dte_gamma_surface} {exp_w}"
+    - "!surface {symbol} vega atm {dte_vega_surface}"
+    - "!surface {symbol} theta atm {dte_theta_atm} {exp_w}"
+    - "!surface {symbol} rho atm {dte_vex}"

@@ -1,0 +1,70 @@
+clamps:
+  strikes: {min: 7, max: 31}
+  dte_short: {min: 7, max: 120}
+  dte_mid: {min: 14, max: 180}
+  dte_long: {min: 30, max: 365}
+  dte_term: {min: 60, max: 730}
+
+defaults:
+  strikes: 15
+  dte_gex: 98
+  dte_vex: 190
+  dte_term: 365
+  dte_skew: 30
+  dte_trigger: 98
+  dte_vanna_atm: 190
+  dte_vanna_ntm: 90
+  dte_extrinsic_ntm: 45
+  dte_theta_atm: 21
+  dte_gamma_surface: 30
+  dte_vega_surface: 60
+  expiration_filter: "*"
+
+liquidity_strikes:
+  excellent: 21
+  good: 17
+  fair: 13
+  poor: 9
+
+oi_unavailable_max_strikes: 11
+
+confidence_gate:
+  min_confidence: 0.35
+  low_confidence_context: "minimum"
+
+horizon_multipliers:
+  adjustment_weight: 1.0
+  bias_weight: 1.0
+  weights:
+    gex: 1.0
+    skew: 0.8
+    vex: 1.0
+    term: 1.0
+  state_overrides:
+    short_low:
+      gex_scale: 0.85
+      skew_scale: 0.90
+      trigger_scale: 0.85
+    full_inversion:
+      gex_scale: 0.7
+      skew_scale: 0.8
+      vex_scale: 0.85
+      term_scale: 0.85
+    short_inversion:
+      gex_scale: 0.8
+      skew_scale: 0.9
+      vex_scale: 0.95
+      term_scale: 0.95
+    far_elevated:
+      gex_scale: 1.0
+      skew_scale: 1.0
+      vex_scale: 1.15
+      term_scale: 1.15
+
+earnings_window:
+  enabled: true
+  event_context: "event"
+  tighten:
+    dte_extrinsic_ntm: 30
+    dte_theta_atm: 14
+    dte_gex_scale: 0.85

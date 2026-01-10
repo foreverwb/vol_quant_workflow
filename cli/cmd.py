@@ -9,14 +9,16 @@ Functions:
 3. Create output file skeleton
 """
 
-import os
 import json
 import argparse
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
 
 from .gexbot import GexbotCommandGenerator
+from ..integrations.bridge_client import BridgeClient
+from ..core.gexbot_param_resolver import resolve as resolve_gexbot_params
 from ..core.schema import InputSchema, OutputSchema
 from ..core.config import Config, get_config
 
@@ -34,12 +36,13 @@ class CmdHandler:
     def __init__(self, config: Optional[Config] = None):
         """Initialize handler."""
         self.config = config or get_config()
+        self.bridge_client = BridgeClient()
     
     def execute(
         self,
         symbol: str,
-        date: str,
-        context: str = "standard",
+        date: Optional[str],
+        context: Optional[str] = None,
         runtime_dir: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
@@ -57,18 +60,24 @@ class CmdHandler:
         symbol = symbol.upper()
         runtime_dir = runtime_dir or self.config.runtime_dir
         
-        # Validate date format
-        try:
-            datetime.strptime(date, "%Y-%m-%d")
-        except ValueError:
-            return {
-                "success": False,
-                "error": f"Invalid date format: {date}. Use YYYY-MM-DD.",
-            }
+        # Validate date format if provided
+        if date:
+            try:
+                datetime.strptime(date, "%Y-%m-%d")
+            except ValueError:
+                return {
+                    "success": False,
+                    "error": f"Invalid date format: {date}. Use YYYY-MM-DD.",
+                }
+        effective_date = date or datetime.now().strftime("%Y-%m-%d")
         
         # Generate gexbot commands
-        gexbot = GexbotCommandGenerator(symbol)
-        commands = gexbot.get_commands_for_context(context)
+        bridge = self.bridge_client.get_bridge(symbol, date=date)
+        params, resolved_context, explain = resolve_gexbot_params(bridge, symbol)
+        chosen_context = context or resolved_context
+
+        gexbot = GexbotCommandGenerator(symbol, params=params)
+        commands = gexbot.get_commands_for_context(chosen_context)
         
         # Create runtime directories
         inputs_dir = Path(runtime_dir) / "inputs"
@@ -77,25 +86,39 @@ class CmdHandler:
         outputs_dir.mkdir(parents=True, exist_ok=True)
         
         # Generate file paths
-        input_path = inputs_dir / f"{symbol}_i_{date}.json"
-        output_path = outputs_dir / f"{symbol}_o_{date}.json"
+        input_path = inputs_dir / f"{symbol}_i_{effective_date}.json"
+        output_path = outputs_dir / f"{symbol}_o_{effective_date}.json"
         
         # Create or validate input file
-        input_result = self._handle_input_file(input_path, symbol, date)
+        input_result = self._handle_input_file(input_path, symbol, effective_date)
         
         # Create output file skeleton
-        output_result = self._handle_output_file(output_path, symbol, date, commands)
+        bridge_payload = {
+            "used": bridge is not None,
+            "explain": explain,
+            "term_structure": bridge.get("term_structure") if bridge else None,
+        }
+        output_result = self._handle_output_file(
+            output_path,
+            symbol,
+            effective_date,
+            commands,
+            bridge_payload,
+            params.to_dict(),
+        )
         
         return {
             "success": True,
             "symbol": symbol,
-            "date": date,
+            "date": effective_date,
             "gexbot_commands": commands,
             "gexbot_output": gexbot.format_for_output(commands),
             "input_file": str(input_path),
             "output_file": str(output_path),
             "input_status": input_result,
             "output_status": output_result,
+            "bridge": bridge_payload,
+            "command_config": params.to_dict(),
         }
     
     def _handle_input_file(
@@ -145,6 +168,8 @@ class CmdHandler:
         symbol: str,
         date: str,
         commands: list,
+        bridge_payload: Dict[str, Any],
+        params_payload: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Create or update output file skeleton."""
         now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
@@ -157,6 +182,8 @@ class CmdHandler:
                 
                 data["last_update"] = now
                 data["gexbot_commands"] = commands
+                data["bridge"] = bridge_payload
+                data["command_config"] = params_payload
                 
                 with open(path, 'w') as f:
                     json.dump(data, f, indent=2)
@@ -175,6 +202,8 @@ class CmdHandler:
             skeleton = OutputSchema.get_empty_template(symbol, date)
             skeleton["last_update"] = now
             skeleton["gexbot_commands"] = commands
+            skeleton["bridge"] = bridge_payload
+            skeleton["command_config"] = params_payload
             
             with open(path, 'w') as f:
                 json.dump(skeleton, f, indent=2)
@@ -247,7 +276,7 @@ def main():
     )
     parser.add_argument(
         "-c", "--context",
-        default="standard",
+        default=None,
         choices=["standard", "minimum", "event", "intraday", "post_event", "long_term"],
         help="Command context for gexbot suite"
     )
@@ -259,10 +288,10 @@ def main():
     
     args = parser.parse_args()
     
-    # Default date to today if not specified
-    if args.date is None:
-        args.date = datetime.now().strftime("%Y-%m-%d")
-    
+    context_provided = any(arg in ("-c", "--context") for arg in sys.argv[1:])
+    if not context_provided:
+        args.context = None
+
     handler = CmdHandler()
     result = handler.execute(
         symbol=args.symbol,
