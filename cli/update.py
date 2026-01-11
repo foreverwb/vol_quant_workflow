@@ -1,7 +1,7 @@
 """
 update handler - Lightweight monitoring command.
 
-Usage: vol update -i INPUT_FILE -c OUTPUT_FILE
+Usage: vol updated -i INPUT_FILE -c OUTPUT_FILE
 
 ALLOWED operations:
 - Regime/volatility/structure/liquidity metrics
@@ -291,7 +291,7 @@ def resolve_file_path(name: str, file_type: str, runtime_dir: str = "runtime") -
     
     Examples:
         AAPL_i_2025-01-05 -> runtime/inputs/AAPL_i_2025-01-05.json
-        AAPL_o_2025-01-05 -> runtime/outputs/AAPL_o_2025-01-05.json
+        AAPL_o_2025-01-05 -> runtime/outputs/AAPL/2025-01-05/AAPL_o_2025-01-05.json
         /full/path/file.json -> /full/path/file.json (unchanged)
     """
     # If already a full path (contains / or \), use as-is
@@ -306,6 +306,15 @@ def resolve_file_path(name: str, file_type: str, runtime_dir: str = "runtime") -
     if file_type == "input":
         return str(Path(runtime_dir) / "inputs" / name)
     else:  # output
+        stem = Path(name).stem
+        symbol = None
+        date = None
+        parts = stem.split("_")
+        if len(parts) >= 3 and parts[-2] == "o":
+            symbol = parts[0].upper()
+            date = parts[-1]
+        if symbol and date:
+            return str(Path(runtime_dir) / "outputs" / symbol / date / name)
         return str(Path(runtime_dir) / "outputs" / name)
 
 
@@ -313,7 +322,7 @@ def main():
     """CLI entry point for update command."""
     parser = argparse.ArgumentParser(
         description="Lightweight update - regime monitoring only",
-        usage="update -i INPUT -c OUTPUT"
+        usage="updated -i INPUT -c OUTPUT"
     )
     parser.add_argument(
         "-i", "--input",

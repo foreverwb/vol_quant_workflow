@@ -42,18 +42,30 @@ trading_system/    → 包名: trading_system
 cmd AAPL
 cmd AAPL -d 2025-01-05
 
+# 生成 schema_core 命令清单（用于填充 22 核心字段）
+cmd AAPL -c schema_core
+
 # 完整分析
 task -i AAPL_i_2025-01-05 -c AAPL_o_2025-01-05
 
 # 轻量更新
-update -i AAPL_i_2025-01-05 -c AAPL_o_2025-01-05
+updated -i AAPL_i_2025-01-05 -c AAPL_o_2025-01-05
 ```
+
+### Bridge 市场状态写入
+
+在 `cmd` 生成输入模板时，如果 Bridge API 返回 market_state，将优先写入：
+- `volatility.hv20`（仅在该字段为空时）
+- `meta.datetime`（优先使用 market_state.as_of）
+
+如果 Bridge 不可用或缺少字段，流程不报错，保持原有行为。
 
 ### 无需安装的方式
 
 ```bash
 ./run.sh cmd AAPL
 ./run.sh task -i AAPL_i_2025-01-05 -c AAPL_o_2025-01-05
+./run.sh updated -i AAPL_i_2025-01-05 -c AAPL_o_2025-01-05
 ```
 
 ## 项目结构

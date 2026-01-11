@@ -11,6 +11,7 @@ Full pipeline:
 import os
 import json
 import argparse
+import html as html_lib
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional, List
@@ -21,6 +22,8 @@ from ..core.constants import Decision
 from ..features import FeatureCalculator
 from ..signals import SignalScorer
 from ..decision import ProbabilityCalibrator, DecisionClassifier, StrategyMapper
+from ..llm import get_llm_client
+from ..prompts import format_strategy_prompt, get_strategy_system_prompt, format_report_prompt, get_report_system_prompt
 from ..execution import StrikeCalculator, EVEstimator, ExecutionGate
 
 
@@ -48,12 +51,13 @@ class TaskHandler:
         # Pipeline components
         self.feature_calculator = FeatureCalculator()
         self.signal_scorer = SignalScorer(self.config)
-        self.probability_calibrator = ProbabilityCalibrator(method="cold_start")
+        self.probability_calibrator = ProbabilityCalibrator(method="llm")
         self.decision_classifier = DecisionClassifier()
         self.strategy_mapper = StrategyMapper()
         self.strike_calculator = StrikeCalculator()
         self.ev_estimator = EVEstimator()
         self.execution_gate = ExecutionGate()
+        self.llm_client = get_llm_client()
     
     def execute(
         self,
@@ -73,6 +77,7 @@ class TaskHandler:
             Dictionary with full analysis results
         """
         # Step 1: Load and validate input
+        self._log_step("Step 1", "Load and validate input")
         input_result = self._load_input(input_file)
         if not input_result["success"]:
             return input_result
@@ -85,9 +90,11 @@ class TaskHandler:
         is_index = symbol in ["SPX", "NDX", "RUT", "DJX"]
         
         # Step 2: Compute features
+        self._log_step("Step 2", "Feature calculation")
         features = self.feature_calculator.calculate(input_data)
         
         # Step 3: Compute signal scores
+        self._log_step("Step 3", "Signal scoring")
         signals = self.signal_scorer.compute_signals(features)
         composite = self.signal_scorer.compute_composite_scores(
             signals, 
@@ -96,14 +103,23 @@ class TaskHandler:
         )
         
         # Step 4: Calibrate probabilities (LLM allowed here)
+        self._log_step("Step 4", "Probability calibration (LLM)")
         context = self._build_calibration_context(input_data, features)
         probabilities = self.probability_calibrator.calibrate(
             long_vol_score=composite.long_vol_score,
             short_vol_score=composite.short_vol_score,
             context=context,
+            signal_breakdown={
+                "s_vrp": signals.s_vrp,
+                "s_gex": signals.s_gex,
+                "s_vex": signals.s_vex,
+                "s_carry": signals.s_carry,
+                "s_skew": signals.s_skew,
+            },
         )
         
         # Step 5: Make decision
+        self._log_step("Step 5", "Decision classification")
         decision_result = self.decision_classifier.classify(
             long_vol_score=composite.long_vol_score,
             short_vol_score=composite.short_vol_score,
@@ -113,17 +129,26 @@ class TaskHandler:
         )
         
         # Step 6: Map to strategies (LLM allowed here)
+        self._log_step("Step 6", "Strategy mapping")
         strategy_candidates = []
         selected_strategy = None
+        llm_strategy_selection = None
+        strategy_run_mode = "decision_only"
+        decisions_to_run = [decision_result.decision]
         
-        if decision_result.decision != Decision.STAND_ASIDE:
+        if decision_result.decision == Decision.STAND_ASIDE:
+            strategy_run_mode = "stand_aside_explore"
+            decisions_to_run = [Decision.LONG_VOL, Decision.SHORT_VOL]
+        
+        for run_decision in decisions_to_run:
             candidates = self.strategy_mapper.get_candidates(
-                decision=decision_result.decision,
+                decision=run_decision,
                 context=context,
             )
             
             # Step 7 & 8: For each candidate, calculate strikes and EV
             for candidate in candidates:
+                self._log_step("Step 7", f"Strike calculation ({candidate.name})")
                 params = self.strategy_mapper.customize_parameters(candidate, context)
                 
                 # Calculate strikes
@@ -134,9 +159,10 @@ class TaskHandler:
                 )
                 
                 # Estimate EV
+                self._log_step("Step 8", f"Edge estimation ({candidate.name})")
                 probability = (
-                    probabilities["p_long"].point_estimate 
-                    if decision_result.decision == Decision.LONG_VOL 
+                    probabilities["p_long"].point_estimate
+                    if candidate.direction == "long_vol"
                     else probabilities["p_short"].point_estimate
                 )
                 
@@ -148,6 +174,7 @@ class TaskHandler:
                 )
                 
                 # Step 9: Check execution gates
+                self._log_step("Step 9", f"Execution gate ({candidate.name})")
                 gate_result = self.execution_gate.check(
                     ev_estimate=ev_result,
                     probability=probability,
@@ -160,6 +187,7 @@ class TaskHandler:
                     "name": candidate.name,
                     "tier": candidate.tier.value,
                     "direction": candidate.direction,
+                    "decision_context": run_decision.value,
                     "dte_range": candidate.dte_range,
                     "delta_targets": params["delta_targets"],
                     "strike_anchors": params["strike_anchors"],
@@ -172,13 +200,23 @@ class TaskHandler:
                     },
                     "is_executable": gate_result.passes and ev_result["ev_positive"],
                 })
-            
-            # Select best executable strategy
+        
+        # Select best executable strategy (only when not stand aside)
+        if decision_result.decision != Decision.STAND_ASIDE:
             executable = [c for c in strategy_candidates if c["is_executable"]]
             if executable:
                 # Sort by EV
                 executable.sort(key=lambda x: x["ev"]["net_ev"], reverse=True)
                 selected_strategy = executable[0]
+        
+        if strategy_candidates:
+            self._log_step("Step 6b", "LLM strategy selection")
+            llm_strategy_selection = self._llm_select_strategy(
+                decision_result,
+                probabilities,
+                context,
+                strategy_candidates,
+            )
         
         # Build full analysis output
         analysis = {
@@ -186,6 +224,7 @@ class TaskHandler:
             "confidence": decision_result.confidence,
             "is_preferred": decision_result.is_preferred,
             "primary_reasons": decision_result.primary_reasons,
+            "strategy_run_mode": strategy_run_mode,
             "scores": {
                 "long_vol_score": composite.long_vol_score,
                 "short_vol_score": composite.short_vol_score,
@@ -209,10 +248,18 @@ class TaskHandler:
             },
             "candidates": strategy_candidates,
             "selected_strategy": selected_strategy,
+            "llm_strategy_selection": llm_strategy_selection,
             "timestamp": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
             "warnings": self._collect_warnings(features, decision_result, strategy_candidates),
             "missing_fields": input_result.get("missing_fields", []),
         }
+        
+        self._log_step("Step 10", "Final report (LLM)")
+        analysis["final_report"] = self._llm_generate_report(analysis)
+        html_path = Path(output_file).parent / "dashboard.html"
+        analysis["final_report_html"] = str(html_path)
+        report_text = analysis["final_report"] or "Report unavailable."
+        self._write_report_html(html_path, report_text, analysis)
         
         # Step 10: Persist to output file
         self._save_analysis(output_file, analysis, input_data)
@@ -317,6 +364,108 @@ class TaskHandler:
                 warnings.append("No strategy passes execution gates - output is NO TRADE")
         
         return warnings
+
+    def _llm_select_strategy(
+        self,
+        decision_result: Any,
+        probabilities: Dict[str, Any],
+        context: Dict[str, Any],
+        candidates: List[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        """Use LLM to select a strategy from candidates."""
+        try:
+            prompt = format_strategy_prompt(
+                decision=decision_result.decision.value,
+                confidence=decision_result.confidence,
+                is_preferred=decision_result.is_preferred,
+                probabilities={
+                    "p_long": probabilities["p_long"].point_estimate,
+                    "p_short": probabilities["p_short"].point_estimate,
+                },
+                context=context,
+                candidates=candidates,
+            )
+            response = self.llm_client.chat(
+                prompt=prompt,
+                system_prompt=get_strategy_system_prompt(),
+                node_type="strategy",
+                response_format="json",
+            )
+            return response.parse_json()
+        except Exception:
+            return None
+
+    def _llm_generate_report(self, analysis: Dict[str, Any]) -> Optional[str]:
+        """Generate a final markdown report with LLM."""
+        try:
+            prompt = format_report_prompt(analysis)
+            response = self.llm_client.chat(
+                prompt=prompt,
+                system_prompt=get_report_system_prompt(),
+                node_type="report",
+            )
+            return response.content
+        except Exception:
+            return None
+
+    def _write_report_html(self, path: Path, markdown_text: str, analysis: Dict[str, Any]) -> None:
+        """Write a minimal HTML report for browser viewing."""
+        title = f"{analysis.get('decision', 'Analysis')} Report"
+        escaped = html_lib.escape(markdown_text or "")
+        html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{html_lib.escape(title)}</title>
+  <style>
+    :root {{
+      color-scheme: light;
+    }}
+    body {{
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+      margin: 40px;
+      color: #111;
+      background: #fafafa;
+    }}
+    .container {{
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 32px;
+      background: #fff;
+      border: 1px solid #e6e6e6;
+      border-radius: 8px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+    }}
+    h1 {{
+      font-size: 20px;
+      margin: 0 0 16px 0;
+    }}
+    .meta {{
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 16px;
+    }}
+    pre {{
+      white-space: pre-wrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+    }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>{html_lib.escape(title)}</h1>
+    <div class="meta">Generated by vol_quant_workflow</div>
+    <pre>{escaped}</pre>
+  </div>
+</body>
+</html>
+"""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w") as f:
+            f.write(html)
     
     def _save_analysis(
         self,
@@ -346,6 +495,10 @@ class TaskHandler:
         
         with open(path, 'w') as f:
             json.dump(output_data, f, indent=2)
+
+    def _log_step(self, step: str, message: str) -> None:
+        """Print pipeline progress to console."""
+        print(f"[{step}] {message}")
     
     def format_output(self, result: Dict[str, Any]) -> str:
         """Format result for console output."""
@@ -399,6 +552,14 @@ class TaskHandler:
             f"  Method:   {analysis['probabilities']['calibration_method']}",
             f"",
         ])
+
+        candidates = analysis.get("candidates", [])
+        strategy_mode = analysis.get("strategy_run_mode", "decision_only")
+        lines.extend([
+            f"  Strategy Run Mode: {strategy_mode}",
+            f"  Candidates Evaluated: {len(candidates)}",
+            f"",
+        ])
         
         # Strategy
         if analysis["selected_strategy"]:
@@ -443,6 +604,17 @@ class TaskHandler:
             for w in analysis["warnings"]:
                 lines.append(f"  ⚠ {w}")
             lines.append("")
+
+        # Final report link (LLM)
+        if analysis.get("final_report_html"):
+            lines.extend([
+                f"───────────────────────────────────────────────────────────────",
+                f"  FINAL REPORT (LLM)",
+                f"───────────────────────────────────────────────────────────────",
+                f"",
+                f"  Report: {analysis['final_report_html']}",
+                f"",
+            ])
         
         lines.extend([
             f"═══════════════════════════════════════════════════════════════",
@@ -474,6 +646,15 @@ def resolve_file_path(name: str, file_type: str, runtime_dir: str = "runtime") -
     if file_type == "input":
         return str(Path(runtime_dir) / "inputs" / name)
     else:  # output
+        stem = Path(name).stem
+        symbol = None
+        date = None
+        parts = stem.split("_")
+        if len(parts) >= 3 and parts[-2] == "o":
+            symbol = parts[0].upper()
+            date = parts[-1]
+        if symbol and date:
+            return str(Path(runtime_dir) / "outputs" / symbol / date / name)
         return str(Path(runtime_dir) / "outputs" / name)
 
 

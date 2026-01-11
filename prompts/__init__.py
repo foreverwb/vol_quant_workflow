@@ -21,6 +21,12 @@ from .strategy import (
     get_strategy_templates,
     get_strategy_template,
 )
+from .report import (
+    REPORT_SYSTEM_PROMPT,
+    REPORT_USER_TEMPLATE,
+    format_report_prompt,
+    get_report_system_prompt,
+)
 
 __all__ = [
     # Probability prompts
@@ -38,4 +44,9 @@ __all__ = [
     "get_strategy_system_prompt",
     "get_strategy_templates",
     "get_strategy_template",
+    # Report prompts
+    "REPORT_SYSTEM_PROMPT",
+    "REPORT_USER_TEMPLATE",
+    "format_report_prompt",
+    "get_report_system_prompt",
 ]

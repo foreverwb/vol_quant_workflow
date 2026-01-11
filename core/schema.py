@@ -107,8 +107,12 @@ class InputSchema:
         # Validate market
         if "spot" not in data["market"]:
             errors.append("market.spot is required")
-        elif data["market"]["spot"] <= 0:
-            errors.append("market.spot must be positive")
+        else:
+            spot_val = data["market"]["spot"]
+            if spot_val is None:
+                errors.append("market.spot must be provided")
+            elif not isinstance(spot_val, (int, float)) or spot_val <= 0:
+                errors.append("market.spot must be a positive number")
         
         # Validate regime
         regime_required = ["vol_trigger", "net_gex_sign", "gamma_wall_call", "gamma_wall_put", "gamma_wall_proximity_pct"]
@@ -124,7 +128,13 @@ class InputSchema:
         for field in vol_required:
             if field not in data["volatility"]:
                 errors.append(f"volatility.{field} is required")
-            elif data["volatility"][field] < 0:
+                continue
+            val = data["volatility"][field]
+            if val is None:
+                errors.append(f"volatility.{field} must be provided")
+            elif not isinstance(val, (int, float)):
+                errors.append(f"volatility.{field} must be a number")
+            elif val < 0:
                 errors.append(f"volatility.{field} must be non-negative")
         
         # Validate structure

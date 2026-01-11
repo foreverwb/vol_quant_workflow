@@ -20,7 +20,7 @@ case "$CMD" in
     task)
         exec python3 -m "${PACKAGE_NAME}.cli.task" "$@"
         ;;
-    update)
+    updated)
         exec python3 -m "${PACKAGE_NAME}.cli.update" "$@"
         ;;
     test)
@@ -34,7 +34,7 @@ case "$CMD" in
         echo "Commands:"
         echo "  cmd     Initialize symbol"
         echo "  task    Full analysis pipeline"
-        echo "  update  Lightweight monitoring update"
+        echo "  updated  Lightweight monitoring update"
         echo "  test    Run tests"
         ;;
     *)

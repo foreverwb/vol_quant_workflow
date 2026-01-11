@@ -6,6 +6,9 @@ This module is allowed to use LLM for uncertainty quantification.
 from typing import Dict, Any, Tuple, Optional
 from dataclasses import dataclass
 
+from ..llm import get_llm_client
+from ..prompts import format_probability_prompt, get_probability_system_prompt
+
 
 @dataclass
 class ProbabilityEstimate:
@@ -62,6 +65,7 @@ class ProbabilityCalibrator:
         self.historical_data = historical_data
         self._platt_params = None
         self._isotonic_map = None
+        self._llm_client = None
         
         if method == "platt" and historical_data:
             self._fit_platt()
@@ -73,6 +77,7 @@ class ProbabilityCalibrator:
         long_vol_score: float,
         short_vol_score: float,
         context: Optional[Dict[str, Any]] = None,
+        signal_breakdown: Optional[Dict[str, float]] = None,
     ) -> Dict[str, ProbabilityEstimate]:
         """
         Calibrate scores to probabilities.
@@ -85,7 +90,12 @@ class ProbabilityCalibrator:
         Returns:
             Dictionary with p_long and p_short estimates
         """
-        if self.method == "cold_start":
+        if self.method == "llm":
+            p_long, p_short = self._llm_calibrate(long_vol_score, short_vol_score, context, signal_breakdown)
+            if p_long is None or p_short is None:
+                p_long = self._cold_start_calibrate(long_vol_score, "long")
+                p_short = self._cold_start_calibrate(short_vol_score, "short")
+        elif self.method == "cold_start":
             p_long = self._cold_start_calibrate(long_vol_score, "long")
             p_short = self._cold_start_calibrate(short_vol_score, "short")
         elif self.method == "platt":
@@ -106,6 +116,56 @@ class ProbabilityCalibrator:
             "p_long": p_long,
             "p_short": p_short,
         }
+
+    def _llm_calibrate(
+        self,
+        long_vol_score: float,
+        short_vol_score: float,
+        context: Optional[Dict[str, Any]],
+        signal_breakdown: Optional[Dict[str, float]],
+    ) -> Tuple[Optional[ProbabilityEstimate], Optional[ProbabilityEstimate]]:
+        if self._llm_client is None:
+            self._llm_client = get_llm_client()
+
+        prompt = format_probability_prompt(
+            long_vol_score=long_vol_score,
+            short_vol_score=short_vol_score,
+            context=context or {},
+            signal_breakdown=signal_breakdown or {},
+        )
+
+        try:
+            response = self._llm_client.chat(
+                prompt=prompt,
+                system_prompt=get_probability_system_prompt(),
+                node_type="probability",
+                response_format="json",
+            )
+            data = response.parse_json() or {}
+        except Exception:
+            return None, None
+
+        p_long = data.get("p_long")
+        p_short = data.get("p_short")
+        confidence = data.get("confidence")
+
+        if not isinstance(p_long, (int, float)) or not isinstance(p_short, (int, float)):
+            return None, None
+
+        def _mk_estimate(point: float) -> ProbabilityEstimate:
+            point = max(0.40, min(0.75, float(point)))
+            low = max(0.40, point - 0.05)
+            high = min(0.75, point + 0.05)
+            conf = float(confidence) if isinstance(confidence, (int, float)) else 0.6
+            return ProbabilityEstimate(
+                point_estimate=point,
+                lower_bound=low,
+                upper_bound=high,
+                calibration_method="llm",
+                confidence=max(0.0, min(1.0, conf)),
+            )
+
+        return _mk_estimate(p_long), _mk_estimate(p_short)
     
     def _cold_start_calibrate(
         self,

@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 from pathlib import Path
 
 from ..core.gexbot_params import GexbotParams
+from ..core.gexbot_param_resolver import load_yaml_rules
 from ..core.constants import (
     EXPIRATION_FILTER_ALL,
     EXPIRATION_FILTER_WEEKLY,
@@ -87,6 +88,15 @@ DEFAULT_TEMPLATES: Dict[str, List[str]] = {
         "!surface {symbol} theta atm {dte_theta_atm} {exp_w}",
         "!surface {symbol} rho atm {dte_vex}",
     ],
+    "schema_core": [
+        "!vexn {symbol} {strikes} {dte_vex_5_60} {exp_all}",
+        "!vanna {symbol} atm {dte_vanna_atm_5_60} {exp_all}",
+        "!skew {symbol} ivmid atm {dte_skew}",
+        "!skew {symbol} ivmid ntm {dte_skew}",
+        "!surface {symbol} spread ntm {dte_liquidity}",
+        "!surface {symbol} ivmid ntm {dte_liquidity}",
+        "!surface {symbol} ivask ntm {dte_liquidity}",
+    ],
 }
 
 
@@ -124,6 +134,9 @@ class GexbotCommandGenerator:
         if isinstance(params, GexbotParams):
             return params
         params_dict = params or {}
+        if params is None:
+            rules, _ = load_yaml_rules()
+            params_dict = rules.get("defaults", {})
         if isinstance(params_dict, dict):
             allowed = {f.name for f in fields(GexbotParams)}
             filtered = {k: v for k, v in params_dict.items() if k in allowed}

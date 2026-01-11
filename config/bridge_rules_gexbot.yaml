@@ -9,15 +9,18 @@ defaults:
   strikes: 15
   dte_gex: 98
   dte_vex: 190
+  dte_vex_5_60: 60
   dte_term: 365
   dte_skew: 30
   dte_trigger: 98
   dte_vanna_atm: 190
+  dte_vanna_atm_5_60: 60
   dte_vanna_ntm: 90
   dte_extrinsic_ntm: 45
   dte_theta_atm: 21
   dte_gamma_surface: 30
   dte_vega_surface: 60
+  dte_liquidity: 30
   expiration_filter: "*"
 
 liquidity_strikes:

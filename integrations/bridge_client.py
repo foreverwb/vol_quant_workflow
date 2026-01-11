@@ -37,7 +37,9 @@ class BridgeClient:
 
     def get_bridge(self, symbol: str, date: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Fetch bridge snapshot; return bridge dict or None on any failure."""
-        params = {"date": date} if date else {}
+        params = {"source": "vol"}
+        if date:
+            params["date"] = date
         data = self._get(f"/api/bridge/params/{symbol.upper()}", params=params)
         if not isinstance(data, dict):
             self._logger.debug("Bridge response missing or invalid for %s", symbol)

@@ -11,15 +11,18 @@ class GexbotParams:
     strikes: int
     dte_gex: int
     dte_vex: int
+    dte_vex_5_60: int
     dte_term: int
     dte_skew: int
     dte_trigger: int
     dte_vanna_atm: int
+    dte_vanna_atm_5_60: int
     dte_vanna_ntm: int
     dte_extrinsic_ntm: int
     dte_theta_atm: int
     dte_gamma_surface: int
     dte_vega_surface: int
+    dte_liquidity: int
     expiration_filter: str = "*"
 
     def to_dict(self) -> Dict[str, Any]:

@@ -41,7 +41,7 @@ setup(
         "console_scripts": [
             f"cmd={PACKAGE_NAME}.cli.cmd:main",
             f"task={PACKAGE_NAME}.cli.task:main",
-            f"update={PACKAGE_NAME}.cli.update:main",
+            f"updated={PACKAGE_NAME}.cli.update:main",
         ],
     },
     include_package_data=True,

@@ -1,6 +1,6 @@
 """
 CLI module - Command-line interface for volatility strategy.
-Three commands: cmd, update, task
+Three commands: cmd, updated, task
 
 Note: Lazy imports to avoid RuntimeWarning when running as module.
 """

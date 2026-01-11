@@ -9,6 +9,7 @@ from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, field
 import json
 
+from .settings import get_settings
 
 def _load_yaml(path: str) -> Dict[str, Any]:
     """Load YAML file (simple parser, no external dependency)."""
@@ -29,7 +30,11 @@ def _load_yaml(path: str) -> Dict[str, Any]:
             if ':' in stripped:
                 key, _, value = stripped.partition(':')
                 key = key.strip()
-                value = value.strip().strip('"').strip("'")
+                value = value.strip()
+                # Strip inline comments while preserving URLs
+                if ' #' in value:
+                    value = value.split(' #', 1)[0].strip()
+                value = value.strip('"').strip("'")
                 
                 if indent == 0:
                     # Top-level key
@@ -154,13 +159,14 @@ class ModelOrchestrator:
             # Return defaults
             return cls()
         
+        settings = get_settings()
         # Parse default config
         default_data = config_data.get("default", {})
         default_config = ModelConfig(
             provider=default_data.get("provider", "openai"),
             model=default_data.get("model", "gpt-4"),
-            api_key=default_data.get("api_key") or os.environ.get("DMXAPI_KEY") or os.environ.get("OPENAI_API_KEY"),
-            base_url=default_data.get("base_url"),
+            api_key=default_data.get("api_key") or settings.llm.api_key or os.environ.get("DMXAPI_KEY") or os.environ.get("OPENAI_API_KEY"),
+            base_url=default_data.get("base_url") or settings.llm.api_base,
             temperature=float(default_data.get("temperature", 0.3)),
             max_tokens=int(default_data.get("max_tokens", 4096)),
             timeout=int(default_data.get("timeout", 360)),

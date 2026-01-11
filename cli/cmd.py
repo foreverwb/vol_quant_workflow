@@ -21,6 +21,7 @@ from ..integrations.bridge_client import BridgeClient
 from ..core.gexbot_param_resolver import resolve as resolve_gexbot_params
 from ..core.schema import InputSchema, OutputSchema
 from ..core.config import Config, get_config
+from ..core.input_enrichment import apply_bridge_market_state
 
 
 class CmdHandler:
@@ -81,7 +82,7 @@ class CmdHandler:
         
         # Create runtime directories
         inputs_dir = Path(runtime_dir) / "inputs"
-        outputs_dir = Path(runtime_dir) / "outputs"
+        outputs_dir = Path(runtime_dir) / "outputs" / symbol / effective_date
         inputs_dir.mkdir(parents=True, exist_ok=True)
         outputs_dir.mkdir(parents=True, exist_ok=True)
         
@@ -90,13 +91,16 @@ class CmdHandler:
         output_path = outputs_dir / f"{symbol}_o_{effective_date}.json"
         
         # Create or validate input file
-        input_result = self._handle_input_file(input_path, symbol, effective_date)
+        input_result = self._handle_input_file(input_path, symbol, effective_date, bridge)
         
         # Create output file skeleton
         bridge_payload = {
             "used": bridge is not None,
             "explain": explain,
             "term_structure": bridge.get("term_structure") if bridge else None,
+            "market_state": bridge.get("market_state") if bridge else None,
+            "as_of": (bridge.get("market_state") or {}).get("as_of") if bridge else None,
+            "version": bridge.get("version") if bridge else None,
         }
         output_result = self._handle_output_file(
             output_path,
@@ -126,9 +130,12 @@ class CmdHandler:
         path: Path,
         symbol: str,
         date: str,
+        bridge: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
         """Create or validate input file."""
-        now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        bridge_state = bridge.get("market_state") if isinstance(bridge, dict) else {}
+        bridge_as_of = bridge_state.get("as_of") if isinstance(bridge_state, dict) else None
+        now = bridge_as_of or datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
         
         if path.exists():
             # Validate existing file
@@ -136,6 +143,9 @@ class CmdHandler:
                 with open(path, 'r') as f:
                     data = json.load(f)
                 
+                data = apply_bridge_market_state(data, bridge)
+                with open(path, 'w') as f:
+                    json.dump(data, f, indent=2)
                 is_valid, errors = InputSchema.validate(data)
                 
                 return {
@@ -152,6 +162,7 @@ class CmdHandler:
         else:
             # Create new template
             template = InputSchema.get_empty_template(symbol, now)
+            template = apply_bridge_market_state(template, bridge)
             
             with open(path, 'w') as f:
                 json.dump(template, f, indent=2)
@@ -251,8 +262,8 @@ class CmdHandler:
             f"  NEXT STEPS:",
             f"  1. Run the gexbot commands above",
             f"  2. Fill in the input file with the 22 core fields",
-            f"  3. Run: vol update -i {result['input_file']} -c {result['output_file']}",
-            f"  4. Run: vol task -i {result['input_file']} -c {result['output_file']}",
+            f"  3. Run: vol update -i {result['symbol']}_i_{result['date']} -c {result['symbol']}_o_{result['date']}",
+            f"  4. Run: vol task -i {result['symbol']}_i_{result['date']} -c {result['symbol']}_o_{result['date']}",
             f"",
         ])
         
@@ -277,7 +288,7 @@ def main():
     parser.add_argument(
         "-c", "--context",
         default=None,
-        choices=["standard", "minimum", "event", "intraday", "post_event", "long_term"],
+        choices=["standard", "minimum", "event", "intraday", "post_event", "long_term", "schema_core"],
         help="Command context for gexbot suite"
     )
     parser.add_argument(

@@ -4,7 +4,7 @@ Volatility Strategy CLI - Main entry point.
 
 Usage:
     vol cmd -s SYMBOL -d YYYY-MM-DD
-    vol update -i INPUT -c OUTPUT  
+    vol updated -i INPUT -c OUTPUT  
     vol task -i INPUT -c OUTPUT
 """
 
@@ -53,9 +53,9 @@ def main():
         help="Runtime directory path",
     )
     
-    # update subcommand
+    # updated subcommand
     update_parser = subparsers.add_parser(
-        "update",
+        "updated",
         help="Lightweight monitoring - regime/volatility only",
     )
     update_parser.add_argument(
@@ -111,7 +111,7 @@ def main():
         )
         print(handler.format_output(result))
         
-    elif args.command == "update":
+    elif args.command == "updated":
         from .cli.update import UpdateHandler
         handler = UpdateHandler()
         result = handler.execute(

@@ -65,3 +65,12 @@ contexts:
     - "!surface {symbol} vega atm {dte_vega_surface}"
     - "!surface {symbol} theta atm {dte_theta_atm} {exp_w}"
     - "!surface {symbol} rho atm {dte_vex}"
+
+  schema_core:
+    - "!vexn {symbol} {strikes} {dte_vex_5_60} {exp_all}"
+    - "!vanna {symbol} atm {dte_vanna_atm_5_60} {exp_all}"
+    - "!skew {symbol} ivmid atm {dte_skew}"
+    - "!skew {symbol} ivmid ntm {dte_skew}"
+    - "!surface {symbol} spread ntm {dte_liquidity}"
+    - "!surface {symbol} ivmid ntm {dte_liquidity}"
+    - "!surface {symbol} ivask ntm {dte_liquidity}"
