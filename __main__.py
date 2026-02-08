@@ -4,6 +4,7 @@ Volatility Strategy CLI - Main entry point.
 
 Usage:
     vol cmd -s SYMBOL -d YYYY-MM-DD
+    vol batch -d YYYY-MM-DD [--limit N] [--symbol SYMBOL] [--runtime-dir DIR]
     vol updated -i INPUT -c OUTPUT  
     vol task -i INPUT -c OUTPUT
 """
@@ -14,6 +15,10 @@ import argparse
 
 def main():
     """Main CLI entry point with subcommands."""
+    from .config.settings import get_settings
+
+    settings = get_settings()
+
     parser = argparse.ArgumentParser(
         prog="vol",
         description="Volatility Strategy Framework CLI",
@@ -48,6 +53,33 @@ def main():
         help="Command context for gexbot suite",
     )
     cmd_parser.add_argument(
+        "--runtime-dir",
+        default="runtime",
+        help="Runtime directory path",
+    )
+
+    # batch subcommand
+    batch_parser = subparsers.add_parser(
+        "batch",
+        help="Initialize multiple symbols from bridge batch endpoint",
+    )
+    batch_parser.add_argument(
+        "-d", "--date",
+        required=True,
+        help="Date in YYYY-MM-DD format",
+    )
+    batch_parser.add_argument(
+        "--limit",
+        type=int,
+        default=settings.va_batch_limit,
+        help="Optional max number of symbols to process",
+    )
+    batch_parser.add_argument(
+        "--symbol",
+        default=None,
+        help="Optional symbol filter (e.g., AAPL)",
+    )
+    batch_parser.add_argument(
         "--runtime-dir",
         default="runtime",
         help="Runtime directory path",
@@ -107,6 +139,17 @@ def main():
             symbol=args.symbol,
             date=args.date,
             context=args.context,
+            runtime_dir=args.runtime_dir,
+        )
+        print(handler.format_output(result))
+
+    elif args.command == "batch":
+        from .cli.batch import BatchHandler
+        handler = BatchHandler()
+        result = handler.execute(
+            date=args.date,
+            limit=args.limit,
+            symbol=args.symbol,
             runtime_dir=args.runtime_dir,
         )
         print(handler.format_output(result))

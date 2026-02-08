@@ -290,7 +290,7 @@ def resolve_file_path(name: str, file_type: str, runtime_dir: str = "runtime") -
     Resolve simplified file name to full path.
     
     Examples:
-        AAPL_i_2025-01-05 -> runtime/inputs/AAPL_i_2025-01-05.json
+        AAPL_i_2025-01-05 -> runtime/inputs/2025-01-05/AAPL_i_2025-01-05.json
         AAPL_o_2025-01-05 -> runtime/outputs/AAPL/2025-01-05/AAPL_o_2025-01-05.json
         /full/path/file.json -> /full/path/file.json (unchanged)
     """
@@ -304,6 +304,14 @@ def resolve_file_path(name: str, file_type: str, runtime_dir: str = "runtime") -
     
     # Add appropriate directory prefix
     if file_type == "input":
+        stem = Path(name).stem
+        parts = stem.split("_")
+        if len(parts) >= 3 and parts[-2] == "i":
+            date = parts[-1]
+            dated_path = Path(runtime_dir) / "inputs" / date / name
+            legacy_path = Path(runtime_dir) / "inputs" / name
+            if dated_path.exists() or not legacy_path.exists():
+                return str(dated_path)
         return str(Path(runtime_dir) / "inputs" / name)
     else:  # output
         stem = Path(name).stem

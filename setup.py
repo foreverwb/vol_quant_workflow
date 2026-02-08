@@ -40,6 +40,7 @@ setup(
     entry_points={
         "console_scripts": [
             f"cmd={PACKAGE_NAME}.cli.cmd:main",
+            f"vol-batch={PACKAGE_NAME}.cli.batch:main",
             f"task={PACKAGE_NAME}.cli.task:main",
             f"updated={PACKAGE_NAME}.cli.update:main",
         ],

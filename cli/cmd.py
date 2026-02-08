@@ -16,12 +16,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-from .gexbot import GexbotCommandGenerator
 from ..integrations.bridge_client import BridgeClient
-from ..core.gexbot_param_resolver import resolve as resolve_gexbot_params
 from ..core.schema import InputSchema, OutputSchema
 from ..core.config import Config, get_config
 from ..core.input_enrichment import apply_bridge_market_state
+from ..core.runner import CmdContext, run_symbol_once
 
 
 class CmdHandler:
@@ -71,17 +70,12 @@ class CmdHandler:
                     "error": f"Invalid date format: {date}. Use YYYY-MM-DD.",
                 }
         effective_date = date or datetime.now().strftime("%Y-%m-%d")
-        
-        # Generate gexbot commands
-        bridge = self.bridge_client.get_bridge(symbol, date=date)
-        params, resolved_context, explain = resolve_gexbot_params(bridge, symbol)
-        chosen_context = context or resolved_context
 
-        gexbot = GexbotCommandGenerator(symbol, params=params)
-        commands = gexbot.get_commands_for_context(chosen_context)
+        # Fetch bridge payload for this symbol/date
+        bridge = self.bridge_client.get_bridge(symbol, date=date)
         
         # Create runtime directories
-        inputs_dir = Path(runtime_dir) / "inputs"
+        inputs_dir = Path(runtime_dir) / "inputs" / effective_date
         outputs_dir = Path(runtime_dir) / "outputs" / symbol / effective_date
         inputs_dir.mkdir(parents=True, exist_ok=True)
         outputs_dir.mkdir(parents=True, exist_ok=True)
@@ -89,41 +83,17 @@ class CmdHandler:
         # Generate file paths
         input_path = inputs_dir / f"{symbol}_i_{effective_date}.json"
         output_path = outputs_dir / f"{symbol}_o_{effective_date}.json"
-        
-        # Create or validate input file
-        input_result = self._handle_input_file(input_path, symbol, effective_date, bridge)
-        
-        # Create output file skeleton
-        bridge_payload = {
-            "used": bridge is not None,
-            "explain": explain,
-            "term_structure": bridge.get("term_structure") if bridge else None,
-            "market_state": bridge.get("market_state") if bridge else None,
-            "as_of": (bridge.get("market_state") or {}).get("as_of") if bridge else None,
-            "version": bridge.get("version") if bridge else None,
-        }
-        output_result = self._handle_output_file(
-            output_path,
-            symbol,
-            effective_date,
-            commands,
-            bridge_payload,
-            params.to_dict(),
+
+        ctx = CmdContext(
+            symbol=symbol,
+            date=effective_date,
+            context=context,
+            source="vol",
+            bridge_base_url=self.bridge_client.base_url,
+            input_handler=self._handle_input_file,
+            output_handler=self._handle_output_file,
         )
-        
-        return {
-            "success": True,
-            "symbol": symbol,
-            "date": effective_date,
-            "gexbot_commands": commands,
-            "gexbot_output": gexbot.format_for_output(commands),
-            "input_file": str(input_path),
-            "output_file": str(output_path),
-            "input_status": input_result,
-            "output_status": output_result,
-            "bridge": bridge_payload,
-            "command_config": params.to_dict(),
-        }
+        return run_symbol_once(ctx, bridge, input_path, output_path)
     
     def _handle_input_file(
         self,

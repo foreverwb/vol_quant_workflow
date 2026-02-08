@@ -1,12 +1,13 @@
 """
 CLI module - Command-line interface for volatility strategy.
-Three commands: cmd, updated, task
+Commands: cmd, batch, updated, task
 
 Note: Lazy imports to avoid RuntimeWarning when running as module.
 """
 
 __all__ = [
     "CmdHandler",
+    "BatchHandler",
     "UpdateHandler", 
     "TaskHandler",
     "GexbotCommandGenerator",
@@ -18,6 +19,9 @@ def __getattr__(name):
     if name == "CmdHandler":
         from .cmd import CmdHandler
         return CmdHandler
+    elif name == "BatchHandler":
+        from .batch import BatchHandler
+        return BatchHandler
     elif name == "UpdateHandler":
         from .update import UpdateHandler
         return UpdateHandler

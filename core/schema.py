@@ -9,7 +9,7 @@ import json
 
 class InputSchema:
     """
-    JSON Schema for runtime/inputs/{SYMBOL}_i_{YYYY-MM-DD}.json
+    JSON Schema for runtime/inputs/{YYYY-MM-DD}/{SYMBOL}_i_{YYYY-MM-DD}.json
     Validates the 22 core fields.
     """
     

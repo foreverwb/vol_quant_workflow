@@ -17,6 +17,9 @@ case "$CMD" in
     cmd)
         exec python3 -m "${PACKAGE_NAME}.cli.cmd" "$@"
         ;;
+    batch)
+        exec python3 -m "${PACKAGE_NAME}.cli.batch" "$@"
+        ;;
     task)
         exec python3 -m "${PACKAGE_NAME}.cli.task" "$@"
         ;;
@@ -33,6 +36,7 @@ case "$CMD" in
         echo ""
         echo "Commands:"
         echo "  cmd     Initialize symbol"
+        echo "  batch   Initialize multiple symbols"
         echo "  task    Full analysis pipeline"
         echo "  updated  Lightweight monitoring update"
         echo "  test    Run tests"

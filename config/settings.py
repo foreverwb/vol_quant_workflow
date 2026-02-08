@@ -139,6 +139,8 @@ class Settings:
     rim: RIMSettings = field(default_factory=RIMSettings)
     log: LogSettings = field(default_factory=LogSettings)
     va_api_base: str = "http://127.0.0.1:8668"
+    va_batch_source: str = "vol"
+    va_batch_limit: Optional[int] = None
     
     @classmethod
     def load(cls, env_path: Optional[str] = None) -> "Settings":
@@ -147,6 +149,14 @@ class Settings:
         
         def get(key: str, default: Any = None) -> str:
             return _get_env(key, default, env_vars)
+
+        def optional_int(value: Any, default: Optional[int] = None) -> Optional[int]:
+            if value in (None, "", "None", "none", "null", "NULL"):
+                return default
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return default
         
         return cls(
             llm=LLMSettings(
@@ -199,6 +209,8 @@ class Settings:
                 file=get("LOG_FILE", "vol_quant.log"),
             ),
             va_api_base=get("VA_API_BASE", "http://127.0.0.1:8668"),
+            va_batch_source=get("VA_BATCH_SOURCE", "vol"),
+            va_batch_limit=optional_int(get("VA_BATCH_LIMIT", ""), None),
         )
     
     def to_dict(self) -> Dict[str, Any]:
@@ -247,6 +259,8 @@ class Settings:
                 "weak_threshold": self.rim.weak_threshold,
             },
             "va_api_base": self.va_api_base,
+            "va_batch_source": self.va_batch_source,
+            "va_batch_limit": self.va_batch_limit,
         }
 
 

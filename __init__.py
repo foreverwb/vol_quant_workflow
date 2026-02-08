@@ -13,6 +13,7 @@ System Constraints:
 
 Commands:
 - cmd: Initialize session, generate gexbot commands
+- batch: Initialize multiple symbols from bridge batch endpoint
 - update: Lightweight monitoring (regime/volatility only)
 - task: Full pipeline (features → signals → probability → strategy → strikes → EV)
 """
@@ -21,7 +22,7 @@ __version__ = "1.0.0"
 __author__ = "Volatility Strategy Framework"
 
 from .core import Config, InputSchema, OutputSchema, Decision, StrategyTier, RegimeState
-from .cli import CmdHandler, UpdateHandler, TaskHandler
+from .cli import CmdHandler, BatchHandler, UpdateHandler, TaskHandler
 
 __all__ = [
     "Config",
@@ -31,6 +32,7 @@ __all__ = [
     "StrategyTier",
     "RegimeState",
     "CmdHandler",
+    "BatchHandler",
     "UpdateHandler",
     "TaskHandler",
 ]
