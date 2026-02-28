@@ -7,9 +7,13 @@ import logging
 import urllib.parse
 import urllib.request
 import urllib.error
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 from ..config.settings import get_settings
+
+
+class BridgeClientError(RuntimeError):
+    """Bridge client protocol/request error."""
 
 
 class BridgeClient:
@@ -17,7 +21,7 @@ class BridgeClient:
 
     def __init__(self, base_url: Optional[str] = None, timeout: float = 6.0):
         settings = get_settings()
-        self.base_url = (base_url or settings.va_api_base).rstrip("/")
+        self.base_url = (base_url or settings.provider_api_base).rstrip("/")
         self.timeout = timeout
         self._logger = logging.getLogger(__name__)
 
@@ -51,37 +55,42 @@ class BridgeClient:
             self._logger.debug("Bridge request failed for %s: %s", url, exc)
             return None
 
-    def get_bridge(self, symbol: str, date: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """Fetch bridge snapshot; return bridge dict or None on any failure."""
-        params = {"source": "vol"}
-        if date:
-            params["date"] = date
-        data = self._get(f"/api/bridge/params/{symbol.upper()}", params=params)
-        if not isinstance(data, dict):
-            self._logger.debug("Bridge response missing or invalid for %s", symbol)
-            return None
-
-        if data.get("success") is True and isinstance(data.get("bridge"), dict):
-            return data["bridge"]
-
-        self._logger.debug("Bridge response unsuccessful for %s", symbol)
-        return None
+    @staticmethod
+    def _normalize_symbols(
+        symbols: Optional[List[str]] = None,
+        symbol: Optional[str] = None,
+    ) -> Optional[List[str]]:
+        out: List[str] = []
+        if isinstance(symbols, list):
+            for item in symbols:
+                if isinstance(item, str) and item.strip():
+                    normalized = item.strip().upper()
+                    if normalized not in out:
+                        out.append(normalized)
+        if isinstance(symbol, str) and symbol.strip():
+            normalized = symbol.strip().upper()
+            if normalized not in out:
+                out.append(normalized)
+        return out or None
 
     def get_bridge_batch(
         self,
-        date: str,
+        date: Optional[str],
+        symbols: Optional[List[str]] = None,
         limit: Optional[int] = None,
         symbol: Optional[str] = None,
     ) -> list:
         """Fetch batch bridge payloads; return normalized list or empty list on failure."""
         body: Dict[str, Any] = {
-            "date": date,
             "source": "vol",
         }
+        if date:
+            body["date"] = date
+        normalized_symbols = self._normalize_symbols(symbols=symbols, symbol=symbol)
+        if normalized_symbols:
+            body["symbols"] = normalized_symbols
         if limit is not None:
             body["limit"] = limit
-        if symbol:
-            body["symbol"] = symbol.upper()
 
         data = self._post("/api/bridge/batch", body=body)
         if not isinstance(data, dict):
@@ -107,3 +116,41 @@ class BridgeClient:
                 normalized.append(item)
 
         return normalized
+
+    def get_bridge_single_via_batch(self, symbol: str, date: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Fetch one symbol via batch endpoint and return row['bridge'] only.
+
+        Raises BridgeClientError when no valid bridge row exists.
+        """
+        symbol_u = symbol.upper()
+        effective_date = date or "latest"
+
+        rows = self.get_bridge_batch(
+            date=date,
+            symbols=[symbol_u],
+            limit=1,
+        )
+        if not rows:
+            raise BridgeClientError(
+                f"No bridge batch result for symbol {symbol_u} on {effective_date}."
+            )
+
+        row = rows[0]
+        bridge = row.get("bridge") if isinstance(row, dict) else None
+        if not isinstance(bridge, dict):
+            raise BridgeClientError(
+                f"Bridge batch row missing 'bridge' object for symbol {symbol_u} on {effective_date}."
+            )
+        return bridge
+
+    def get_bridge(self, symbol: str, date: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Backward-compatible single-symbol helper.
+        Internally routed to batch endpoint.
+        """
+        try:
+            return self.get_bridge_single_via_batch(symbol=symbol, date=date)
+        except BridgeClientError as exc:
+            self._logger.debug("Bridge single fetch failed for %s: %s", symbol, exc)
+            return None

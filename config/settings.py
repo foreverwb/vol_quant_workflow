@@ -138,9 +138,17 @@ class Settings:
     gamma_wall: GammaWallSettings = field(default_factory=GammaWallSettings)
     rim: RIMSettings = field(default_factory=RIMSettings)
     log: LogSettings = field(default_factory=LogSettings)
-    va_api_base: str = "http://127.0.0.1:8668"
+    provider_api_base: str = "http://127.0.0.1:8668"
     va_batch_source: str = "vol"
     va_batch_limit: Optional[int] = None
+
+    @property
+    def va_api_base(self) -> str:
+        """
+        Backward-compatible alias for legacy callers.
+        Prefer provider_api_base in new code.
+        """
+        return self.provider_api_base
     
     @classmethod
     def load(cls, env_path: Optional[str] = None) -> "Settings":
@@ -157,6 +165,24 @@ class Settings:
                 return int(value)
             except (TypeError, ValueError):
                 return default
+
+        def optional_str(value: Any) -> Optional[str]:
+            if value is None:
+                return None
+            if isinstance(value, str):
+                stripped = value.strip()
+                if stripped in ("", "None", "none", "null", "NULL"):
+                    return None
+                return stripped
+            return str(value)
+
+        provider_api_base = (
+            optional_str(get("PROVIDER_API_BASE"))
+            or optional_str(get("provider_api_base"))
+            or optional_str(get("VA_API_BASE"))
+            or optional_str(get("va_api_base"))
+            or "http://127.0.0.1:8668"
+        )
         
         return cls(
             llm=LLMSettings(
@@ -208,7 +234,7 @@ class Settings:
                 level=get("LOG_LEVEL", "INFO"),
                 file=get("LOG_FILE", "vol_quant.log"),
             ),
-            va_api_base=get("VA_API_BASE", "http://127.0.0.1:8668"),
+            provider_api_base=provider_api_base,
             va_batch_source=get("VA_BATCH_SOURCE", "vol"),
             va_batch_limit=optional_int(get("VA_BATCH_LIMIT", ""), None),
         )
@@ -258,6 +284,7 @@ class Settings:
                 "active_threshold": self.rim.active_threshold,
                 "weak_threshold": self.rim.weak_threshold,
             },
+            "provider_api_base": self.provider_api_base,
             "va_api_base": self.va_api_base,
             "va_batch_source": self.va_batch_source,
             "va_batch_limit": self.va_batch_limit,

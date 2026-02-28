@@ -16,13 +16,18 @@ def apply_bridge_market_state(
     if not bridge or not isinstance(bridge, dict):
         return data
 
+    as_of = bridge.get("as_of")
+    if as_of:
+        meta = data.get("meta")
+        if not isinstance(meta, dict):
+            meta = {}
+            data["meta"] = meta
+        if meta.get("datetime") in (None, ""):
+            meta["datetime"] = as_of
+
     market_state = bridge.get("market_state") or {}
     if not isinstance(market_state, dict):
         return data
-
-    as_of = market_state.get("as_of") or bridge.get("as_of")
-    if as_of and data.get("meta", {}).get("datetime") in (None, ""):
-        data["meta"]["datetime"] = as_of
 
     hv20 = market_state.get("hv20")
     if hv20 is not None:

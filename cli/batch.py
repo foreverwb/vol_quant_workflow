@@ -26,7 +26,7 @@ class BatchHandler:
     ):
         self.config = config or get_config()
         self.settings = settings or get_settings()
-        self.bridge_client = bridge_client or BridgeClient(base_url=self.settings.va_api_base)
+        self.bridge_client = bridge_client or BridgeClient(base_url=self.settings.provider_api_base)
         self.cmd_handler = cmd_handler or CmdHandler(config=self.config)
 
     def execute(
